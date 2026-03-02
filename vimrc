@@ -44,11 +44,27 @@ endfunction
 " --- CUSTOM CONFIGURATION STARTS HERE ---
 " ==========================================
 
+" --- GVim Settings (if running GUI) ---
+if has('gui_running')
+    " GUI options - disable menu, toolbar, scrollbars
+    set guioptions-=m
+    set guioptions-=T
+    set guioptions-=r
+    set guioptions-=R
+    set guioptions-=l
+    set guioptions-=L
+    " Start maximized on Windows
+    if has('win32') || has('win64')
+        au GUIEnter * simalt ~x
+    endif
+    " Set font (adjust as needed)
+    set guifont=Consolas:h11
+    " Disable toolbar icons, use text
+    set toolbariconsize=hide
+endif
+
 " --- Display & Basics ---
 set number
-if has('win32') || has('win64')
-  au GUIEnter * simalt ~x
-endif
 
 set tabstop=4
 set shiftwidth=4

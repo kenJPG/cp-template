@@ -1,6 +1,6 @@
 # cp-template
 
-Minimal competitive programming template with Vim-focused workflow.
+Minimal competitive programming template with GVim/Vim-focused workflow.
 
 ## What is included
 
@@ -8,9 +8,9 @@ Minimal competitive programming template with Vim-focused workflow.
 - `templates/cpp.template`: template inserted from Vim
 - `vimrc`: your custom Vim configuration
 - `install_vim.sh`: Vim install script for macOS/Linux
-- `setup.sh`: Unix setup script (links `~/.vimrc`, creates `~/.vim/templates`)
+- `setup.sh`: Unix setup script (links `~/.vimrc`, creates `~/.vim/templates`, detects gvim)
 - `install_vim.ps1`: Vim install script for Windows
-- `setup.ps1`: Windows setup script (copies `~/.vimrc`, creates `%USERPROFILE%\.vim\templates`)
+- `setup.ps1`: Windows setup script (copies `_vimrc` for GVim, creates `%USERPROFILE%\.vim\templates`)
 
 ## Quick start
 
@@ -63,7 +63,7 @@ vim --version
 - If `g++` is missing, install it separately (needed for `<F5>` compile/run).
 - If Vim is newly installed and not found, restart terminal and run `vim --version` again.
 
-## Vim keys used most
+## Vim/GVim keys used most
 
 - `<F5>`: compile and run current C++ file
 - `<F6>`: run `:make` using configured `makeprg`
@@ -73,6 +73,9 @@ vim --version
 - `<Leader>r`: reload `~/.vimrc`
 
 ## Notes
+
+- GVim is recommended on Windows for best experience (uses `_vimrc`)
+- Terminal Vim is also supported on Unix (uses `.vimrc`)
 
 - `g++` must be available in your PATH for `<F5>`/`<F6>`.
 - On Unix, output binary is `%<`; on Windows, `%<.exe`.

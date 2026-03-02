@@ -12,7 +12,7 @@ Write-Host "=== CP Template Setup for Windows ===" -ForegroundColor Cyan
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $VimrcSource = Join-Path $ScriptDir "vimrc"
-$HomeVimrc = "$env:USERPROFILE\.vimrc"
+$HomeVimrc = "$env:USERPROFILE\_vimrc"
 $HomeVim = "$env:USERPROFILE\.vim"
 
 # Check if vimrc exists
@@ -70,17 +70,17 @@ if (Test-Path $TemplateSource) {
 $BatchFile = "$env:USERPROFILE\cpt.bat"
 @"
 @echo off
-vim -u "%USERPROFILE%\.vimrc" %*
+gvim -u "%USERPROFILE%\_vimrc" %*
 "@ | Out-File -FilePath $BatchFile -Encoding ASCII -Force
 
-Write-Host "Created $BatchFile for quick vim access" -ForegroundColor Green
+Write-Host "Created $BatchFile for quick gvim access" -ForegroundColor Green
 
 # Add to PATH if not already there (optional)
 Write-Host ""
 Write-Host "=== Setup Complete ===" -ForegroundColor Green
-Write-Host "Run 'vim' to start with the CP configuration"
+Write-Host "Run 'gvim' to start with the CP configuration"
 Write-Host ""
-Write-Host "Useful commands in Vim:" -ForegroundColor Cyan
+Write-Host "Useful commands in GVim:" -ForegroundColor Cyan
 Write-Host "  :TemplateCPP  - Insert C++ template"
 Write-Host "  <F5>         - Compile and run"
 Write-Host "  <F6>         - Compile with makeprg"

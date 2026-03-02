@@ -14,6 +14,15 @@ VIMRC_SOURCE="$SCRIPT_DIR/vimrc"
 HOME_VIMRC="$HOME/.vimrc"
 HOME_VIM="$HOME/.vim"
 
+# Check for gvim (prefer GUI over terminal vim)
+if command -v gvim &> /dev/null; then
+    VIM_CMD="gvim"
+elif command -v vim &> /dev/null; then
+    VIM_CMD="vim"
+else
+    echo "WARNING: Neither gvim nor vim found in PATH"
+fi
+
 echo "=== CP Template Setup ==="
 
 # Check if vimrc exists
@@ -55,9 +64,10 @@ fi
 
 echo ""
 echo "=== Setup Complete ==="
-echo "Run 'vim' to start with the CP configuration"
+echo "Run '$VIM_CMD' to start with the CP configuration"
 echo ""
-echo "Useful commands:"
+echo "Useful commands in $VIM_CMD:"
+echo "  (Same keybindings work in both gvim and vim)"
 echo "  :TemplateCPP  - Insert C++ template (in Vim)"
 echo "  <F5>         - Compile and run current file"
 echo "  <F6>         - Compile with makeprg"
