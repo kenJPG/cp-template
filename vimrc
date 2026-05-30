@@ -65,6 +65,7 @@ endif
 
 " --- Display & Basics ---
 set number
+set belloff=all
 
 set tabstop=4
 set shiftwidth=4
