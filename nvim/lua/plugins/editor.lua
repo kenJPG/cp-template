@@ -7,5 +7,8 @@
 -- ============================================================================
 
 return {
-  { "echasnovski/mini.pairs", enabled = false },
+  -- mini.pairs moved from echasnovski/* to the nvim-mini org; lazy.nvim
+  -- resolves plugins by short name ("mini.pairs") so the disable applies
+  -- either way, but point at the new URL to avoid relying on the old org.
+  { "nvim-mini/mini.pairs", enabled = false },
 }
