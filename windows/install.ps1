@@ -57,9 +57,14 @@ if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
 # ----------------------------------------------------------------------------
 Write-Step "Checking WSL / Ubuntu..."
 
-# `wsl -l -q` lists installed distros (one per line). Empty / error => none yet.
+# `wsl -l -q` lists installed distros (one per line). wsl.exe writes UTF-16LE;
+# when PowerShell captures it as plain strings each character can get padded
+# with a NUL byte, which breaks -match. Strip NULs before comparing.
 $distros = @()
-try { $distros = (wsl -l -q) 2>$null | Where-Object { $_ -and $_.Trim() -ne "" } } catch {}
+try {
+    $raw = (wsl -l -q) 2>$null
+    $distros = $raw | ForEach-Object { ($_ -replace "`0", "").Trim() } | Where-Object { $_ -ne "" }
+} catch {}
 
 $haveUbuntu = $distros | Where-Object { $_ -match "Ubuntu" }
 
@@ -71,9 +76,23 @@ if ($haveUbuntu) {
     Write-Step "Installing WSL2 + Ubuntu (this enables Windows features under the hood)..."
     # --no-launch avoids blocking on the interactive first-run user setup; the
     # distro's initial account creation happens the first time you open it.
-    wsl --install -d Ubuntu --no-launch
-    Write-Done "WSL2 + Ubuntu install requested."
-    $rebootNeeded = $true
+    # Capture output/exit code rather than trusting it blindly: if our distro
+    # detection above missed an existing install (e.g. non-English Windows,
+    # unusual distro naming), `wsl --install` fails with ERROR_ALREADY_EXISTS
+    # rather than actually installing anything — that must NOT be reported as
+    # "reboot required", or every re-run would nag for a pointless reboot.
+    $installOutput = wsl --install -d Ubuntu --no-launch 2>&1 | Out-String
+    $installExit = $LASTEXITCODE
+    Write-Host $installOutput
+
+    if ($installExit -eq 0) {
+        Write-Done "WSL2 + Ubuntu install requested."
+        $rebootNeeded = $true
+    } elseif ($installOutput -match "ALREADY_EXISTS") {
+        Write-Skip "Ubuntu is already installed (detected via install error, not the listing above)."
+    } else {
+        Write-Host "    [warn] wsl --install exited with code $installExit — see output above." -ForegroundColor Yellow
+    }
 }
 
 # ----------------------------------------------------------------------------
