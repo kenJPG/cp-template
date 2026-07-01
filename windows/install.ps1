@@ -1,5 +1,5 @@
 # ============================================================================
-# install.ps1 — Windows-side setup
+# install.ps1 - Windows-side setup
 # ============================================================================
 # Run from an ELEVATED (Administrator) PowerShell prompt:
 #
@@ -79,7 +79,7 @@ if ($haveUbuntu) {
     # Capture output/exit code rather than trusting it blindly: if our distro
     # detection above missed an existing install (e.g. non-English Windows,
     # unusual distro naming), `wsl --install` fails with ERROR_ALREADY_EXISTS
-    # rather than actually installing anything — that must NOT be reported as
+    # rather than actually installing anything - that must NOT be reported as
     # "reboot required", or every re-run would nag for a pointless reboot.
     $installOutput = wsl --install -d Ubuntu --no-launch 2>&1 | Out-String
     $installExit = $LASTEXITCODE
@@ -91,7 +91,7 @@ if ($haveUbuntu) {
     } elseif ($installOutput -match "ALREADY_EXISTS") {
         Write-Skip "Ubuntu is already installed (detected via install error, not the listing above)."
     } else {
-        Write-Host "    [warn] wsl --install exited with code $installExit — see output above." -ForegroundColor Yellow
+        Write-Host "    [warn] wsl --install exited with code $installExit - see output above." -ForegroundColor Yellow
     }
 }
 
@@ -138,7 +138,7 @@ if ($rebootNeeded) {
 Write-Host @"
 
   1. (If prompted above) reboot Windows.
-  2. Open WezTerm — it drops you straight into Ubuntu (WSL).
+  2. Open WezTerm - it drops you straight into Ubuntu (WSL).
      * On first launch Ubuntu will ask you to create a UNIX username/password.
   3. Clone this repo inside WSL (or cd into it if it lives under /mnt/c/...),
      then run the Linux-side installer:
