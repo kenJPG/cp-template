@@ -67,6 +67,7 @@ has none of these problems: the browser knows its own pixel dimensions fine.
 ```
 .
 ├── README.md                  # this file
+├── install.cmd                 # double-click this: elevates + runs install.ps1
 ├── install.ps1                 # the one setup script (winget installs + symlink + plugin sync)
 └── nvim/                       # symlinked to %LOCALAPPDATA%\nvim
     ├── init.lua
@@ -87,7 +88,12 @@ has none of these problems: the browser knows its own pixel dimensions fine.
 
 ## Install
 
-Open an **elevated PowerShell** prompt in the repo root and run:
+**Double-click `install.cmd`** in the repo root. It relaunches `install.ps1`
+elevated (you'll get the normal UAC prompt) and leaves the window open so you
+can read the log. (Double-clicking the `.ps1` directly just opens Notepad —
+that's a Windows security default — hence the `.cmd` wrapper.)
+
+Or, equivalently, from an **elevated PowerShell** prompt in the repo root:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\install.ps1
