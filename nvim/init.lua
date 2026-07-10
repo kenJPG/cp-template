@@ -1,8 +1,8 @@
 -- ============================================================================
 -- init.lua — entry point for the LazyVim-based config
 -- ============================================================================
--- This file is symlinked to ~/.config/nvim by wsl/install.sh, so editing it in
--- the repo takes effect live (after restarting Neovim).
+-- This file is symlinked to %LOCALAPPDATA%\nvim by install.ps1, so editing it
+-- in the repo takes effect live (after restarting Neovim).
 --
 -- What happens here, in order:
 --   1. Set the leader keys BEFORE any plugin loads. which-key and lazy.nvim

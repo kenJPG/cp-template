@@ -53,7 +53,7 @@ local function build_and_run()
   vim.cmd("silent! write")
 
   local src = vim.fn.expand("%:p")
-  local bin = vim.fn.expand("%:p:r") -- same path, extension stripped (Linux: no .exe)
+  local bin = vim.fn.expand("%:p:r") .. ".exe" -- same path, extension stripped, +.exe
 
   -- Compile synchronously so we know whether to run.
   local res = vim.system(
@@ -91,8 +91,8 @@ map("n", "<leader><space>", ":nohlsearch<CR>", { silent = true, desc = "Clear se
 map("n", "<leader>q", ":qa!<CR>", { silent = true, desc = "Quit all (no save)" })
 
 -- Ctrl-Backspace deletes the previous word, in insert and command-line mode.
--- (Some terminals send <C-h> for Ctrl-Backspace; WezTerm sends <C-BS>, which is
--- what we map here.)
+-- (Some terminals send <C-h> for Ctrl-Backspace instead; Windows Terminal and
+-- PowerShell send <C-BS>, which is what we map here.)
 map("i", "<C-BS>", "<C-w>", { noremap = true })
 map("c", "<C-BS>", "<C-w>", { noremap = true })
 

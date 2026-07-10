@@ -36,9 +36,9 @@ opt.hlsearch = true        -- highlight all matches
 opt.showmatch = true       -- briefly jump to the matching bracket
 opt.matchtime = 1          -- ...for 1/10s
 
--- Use the system clipboard for all yanks/pastes. On WSL this is bridged to the
--- real Windows clipboard by win32yank.exe (see wsl/clipboard-bridge.sh), so
--- "just yank" works — no "+ prefix needed.
+-- Use the system clipboard for all yanks/pastes. The official Windows Neovim
+-- build bundles win32yank.exe, so this "just works" out of the box — no "+
+-- prefix needed, and no extra setup required.
 opt.clipboard = "unnamedplus"
 
 -- Leader is also set in init.lua (before plugins load); repeated here so this
@@ -63,6 +63,6 @@ vim.filetype.add({
 vim.api.nvim_create_autocmd("FileType", {
   pattern = "cpp",
   callback = function()
-    vim.opt_local.makeprg = "g++ -std=c++17 -O2 -Wall % -o %<"
+    vim.opt_local.makeprg = "g++ -std=c++17 -O2 -Wall % -o %<.exe"
   end,
 })
