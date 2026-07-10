@@ -1,11 +1,12 @@
-# These files run inside WSL/Linux — they MUST keep LF line endings.
-# CRLF in a shell script produces `bad interpreter: /usr/bin/env bash^M`.
-*.sh            text eol=lf
-# Neovim/LazyVim config is loaded by a Linux Neovim; keep LF to be safe.
+# Neovim config: LF everywhere. Windows Neovim reads LF fine, and LF avoids
+# any tooling that chokes on CRLF in Lua.
 *.lua           text eol=lf
 
-# Windows-side scripts are fine either way; leave them CRLF on Windows.
+# Windows scripts: force CRLF. PowerShell tolerates LF, but cmd.exe can
+# genuinely misparse batch files with LF-only endings (labels/GOTO edge
+# cases), so don't leave .cmd endings to each machine's autocrlf setting.
 *.ps1           text eol=crlf
+*.cmd           text eol=crlf
 
-# Docs: let git normalize; LF is fine everywhere.
+# Docs: LF is fine everywhere.
 *.md            text eol=lf
