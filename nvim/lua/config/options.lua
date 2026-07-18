@@ -46,6 +46,16 @@ opt.clipboard = "unnamedplus"
 vim.g.mapleader = " "
 
 -- ----------------------------------------------------------------------------
+-- GUI font (Neovide). LazyVim's UI is full of Nerd Font icons; without a Nerd
+-- Font they render as ◆?-diamonds. install.ps1 installs JetBrainsMono Nerd
+-- Font via winget, whose registered family name is "JetBrainsMono NF" (NOT
+-- "JetBrainsMono Nerd Font" — the winget packaging uses the short name).
+-- Harmless under terminal nvim, where the terminal's own font applies instead
+-- (use a Nerd Font there too — Windows Terminal ships "Cascadia Code NF").
+-- ----------------------------------------------------------------------------
+vim.o.guifont = "JetBrainsMono NF:h11"
+
+-- ----------------------------------------------------------------------------
 -- Filetype: .typ must be recognised as Typst, or tinymist/typst-preview never
 -- attach. If `:set filetype?` on a .typ buffer doesn't say "typst", this block
 -- isn't loading (see the README troubleshooting section).

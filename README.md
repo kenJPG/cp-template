@@ -104,6 +104,9 @@ skipped):
 
 - **Neovim** — also bundles `win32yank.exe`, so clipboard support needs no
   extra setup at all.
+- **Neovide** — GUI frontend for Neovim; the recommended way to launch (see
+  below).
+- **JetBrainsMono Nerd Font** — LazyVim's UI icons need a Nerd Font.
 - **Typst** — the compiler CLI (for `<leader>te` PDF export).
 - **Tinymist** — the Typst language server.
 - **clangd** — the C++ language server.
@@ -115,8 +118,17 @@ Then it symlinks `nvim/` from this repo to `%LOCALAPPDATA%\nvim` (backing up
 any existing config it finds first), and force-syncs all Neovim plugins
 headlessly so the first real launch isn't the one waiting on downloads.
 
-Open a **new** terminal after it finishes (so the PATH changes from `winget`
-take effect), and run `nvim`.
+When it finishes, launch **Neovide** from the Start menu (recommended), or run
+`nvim` from a **new Windows Terminal** window.
+
+> **Do not run `nvim` inside plain `cmd.exe`** (the legacy console/conhost).
+> Its fonts can't render LazyVim's Nerd Font icons (you get `?`-in-diamond
+> boxes everywhere) and its terminal input handling is flaky — typing into the
+> `<F5>` run split can silently not work. Neovide is a native GUI (the modern
+> GVim equivalent): GPU-accelerated, launches from the Start menu, no terminal
+> in the loop at all. Windows Terminal also works fine — set its font to
+> `JetBrainsMono NF` (installed by this script) or the bundled
+> `Cascadia Code NF`.
 
 ---
 
@@ -146,6 +158,18 @@ clipboard and `p` pastes from it — no `"+` prefix, no extra setup.
 ---
 
 ## Troubleshooting
+
+**`?`-in-diamond symbols all over the UI**
+The font can't render LazyVim's Nerd Font icons. Launch via Neovide (which is
+configured to use `JetBrainsMono NF`), or if you're in a terminal, make sure
+it's Windows Terminal with a Nerd Font set — not plain `cmd.exe`, whose fonts
+can't do this at all.
+
+**`<F5>` opens the run split but typing does nothing**
+Almost always: you're running `nvim` inside legacy `cmd.exe`/conhost, whose
+ConPTY input handling is unreliable. Use Neovide or Windows Terminal. (The
+run split is a normal terminal buffer — if you ever land in Normal mode, `i`
+re-enters typing mode, and `<C-\><C-n>` gets you back out.)
 
 **`E492: Not an editor command: MasonInstall`**
 The Mason command hasn't been lazy-loaded yet. Run `:Mason` once to force the

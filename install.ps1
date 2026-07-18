@@ -13,6 +13,12 @@
 # from GitHub releases -- one less thing to go stale):
 #   - Neovim                (editor; the Windows build also bundles win32yank,
 #                             so clipboard integration needs zero extra setup)
+#   - Neovide               (GUI frontend for Neovim -- the recommended way to
+#                             launch. Running the TUI inside legacy cmd/conhost
+#                             is glitchy: no Nerd Font glyphs, flaky terminal
+#                             input. Neovide is the modern GVim equivalent.)
+#   - JetBrainsMono Nerd Font (LazyVim's UI icons need a Nerd Font or they
+#                             render as ?-in-diamond boxes)
 #   - Typst                 (the compiler CLI, for manual/final exports)
 #   - Tinymist               (Typst LSP: completion, diagnostics, formatting)
 #   - clangd                 (C++ LSP, for competitive-programming autocomplete)
@@ -67,6 +73,8 @@ if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
 # 1. Toolchain, all via winget.
 # ----------------------------------------------------------------------------
 Install-WingetPackage "Neovim.Neovim"                     "Neovim"
+Install-WingetPackage "Neovide.Neovide"                    "Neovide (GUI for Neovim)"
+Install-WingetPackage "DEVCOM.JetBrainsMonoNerdFont"       "JetBrainsMono Nerd Font"
 Install-WingetPackage "Typst.Typst"                        "Typst"
 Install-WingetPackage "Myriad-Dreamin.Tinymist"            "Tinymist (Typst LSP)"
 Install-WingetPackage "LLVM.clangd"                        "clangd (C++ LSP)"
@@ -118,5 +126,8 @@ Write-Done "Plugin sync attempted."
 
 Write-Host "`n============================================================" -ForegroundColor Yellow
 Write-Host " Setup complete." -ForegroundColor Yellow
-Write-Host " Open a NEW terminal (so PATH changes apply) and run: nvim" -ForegroundColor Yellow
+Write-Host " Launch 'Neovide' from the Start menu (recommended)," -ForegroundColor Yellow
+Write-Host " or run 'nvim' from a NEW Windows Terminal window." -ForegroundColor Yellow
+Write-Host " (Avoid plain cmd.exe/conhost - glyphs and terminal input" -ForegroundColor Yellow
+Write-Host "  are unreliable there.)" -ForegroundColor Yellow
 Write-Host "============================================================`n" -ForegroundColor Yellow

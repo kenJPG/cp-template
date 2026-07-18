@@ -73,9 +73,19 @@ local function build_and_run()
 
   -- Run in a short terminal split at the bottom. terminal buffers are fully
   -- interactive, so we can type input and scroll output while Neovim stays live.
-  vim.cmd("botright split")
-  vim.cmd("resize 15")
-  vim.cmd("terminal " .. vim.fn.fnameescape(bin))
+  --
+  -- jobstart({bin}, {term=true}) runs the binary DIRECTLY — no shell layer.
+  -- The previous `:terminal <path>` form went through 'shell' (cmd.exe) and
+  -- used fnameescape(), which escapes spaces Unix-style (`\ `) that cmd.exe
+  -- doesn't understand: with a space anywhere in the path the process died
+  -- instantly and the dead terminal split just swallowed keystrokes, looking
+  -- like "F5 runs but I can't type input". Direct exec has no quoting layer
+  -- at all. (:terminal's replacement API; termopen() is deprecated in 0.12.)
+  vim.cmd("botright 15new") -- fresh empty buffer (jobstart term needs one)
+  vim.fn.jobstart({ bin }, {
+    term = true,
+    cwd = vim.fn.fnamemodify(src, ":h"),
+  })
   vim.cmd("startinsert") -- drop straight into the terminal for stdin
 end
 
