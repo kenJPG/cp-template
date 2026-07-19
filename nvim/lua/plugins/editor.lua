@@ -1,14 +1,21 @@
 -- ============================================================================
 -- editor.lua — editor-behaviour overrides
 -- ============================================================================
--- LazyVim enables mini.pairs out of the box. We use our own smart auto-pair
--- engine instead (lua/config/autopairs.lua, installed from keymaps.lua), so we
--- turn mini.pairs off here to avoid two systems fighting over ( [ { etc.
+-- Keep editing direct and predictable: no animated scrolling, indent guides,
+-- or automatic pair insertion.
 -- ============================================================================
 
 return {
-  -- mini.pairs moved from echasnovski/* to the nvim-mini org; lazy.nvim
-  -- resolves plugins by short name ("mini.pairs") so the disable applies
-  -- either way, but point at the new URL to avoid relying on the old org.
-  { "nvim-mini/mini.pairs", enabled = false },
+	-- LazyVim enables Snacks' animated scrolling. It makes large motions such as
+	-- gg and G glide to their destination, which feels like input lag in a GUI.
+	{
+		"folke/snacks.nvim",
+		opts = {
+			scroll = { enabled = false },
+			indent = { enabled = false },
+		},
+	},
+
+	-- LazyVim normally enables this; disabling it restores plain Vim insertion.
+	{ "nvim-mini/mini.pairs", enabled = false },
 }

@@ -1,25 +1,35 @@
 -- ============================================================================
 -- cpp.lua — C++ language support (competitive programming)
 -- ============================================================================
--- Just clangd through LazyVim's nvim-lspconfig, with defaults. This is for
--- single-file contest solutions, not large CMake projects, so there's nothing
--- special to configure — clangd's defaults give completion and diagnostics out
--- of the box. install.ps1 installs clangd via winget directly (LLVM.clangd),
--- so it's ready immediately rather than waiting on Mason's lazy install.
+-- clangd provides completion and diagnostics while g++ remains the real
+-- compiler. Allow clangd to query the exact g++ resolved on PATH so MinGW's
+-- libstdc++ headers (including bits/stdc++.h) are visible to the editor.
 --
--- Note: clangd (LSP) and g++ (the actual compiler, from WinLibs) are
--- deliberately different toolchains here — see install.ps1 for why real GCC
--- matters for competitive programming (<bits/stdc++.h>, #pragma GCC ...).
--- clangd's diagnostics are close enough to be useful despite that mismatch.
+-- bootstrap.ps1 writes the same driver to clangd's global config as Compiler,
+-- which makes this narrow query-driver allowlist effective for standalone files.
 -- ============================================================================
 
+local clangd_cmd = { "clangd" }
+local gxx_name = vim.fn.has("win32") == 1 and "g++.exe" or "g++"
+local gxx = vim.fn.exepath(gxx_name)
+if gxx ~= "" then
+	clangd_cmd[#clangd_cmd + 1] = "--query-driver=" .. gxx:gsub("\\", "/")
+end
+clangd_cmd[#clangd_cmd + 1] = "--fallback-style=none"
+
 return {
-  {
-    "neovim/nvim-lspconfig",
-    opts = {
-      servers = {
-        clangd = {},
-      },
-    },
-  },
+	{
+		"neovim/nvim-lspconfig",
+		opts = {
+			servers = {
+				clangd = {
+					mason = false,
+					cmd = clangd_cmd,
+					init_options = {
+						fallbackFlags = { "-std=gnu++20" },
+					},
+				},
+			},
+		},
+	},
 }

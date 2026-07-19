@@ -12,8 +12,9 @@
 
 local opt = vim.opt
 
-opt.number = true          -- show line numbers
-opt.belloff = "all"        -- no bells, ever (the terminal beep is maddening)
+opt.background = "light" -- classic gVim uses its light syntax palette
+opt.number = true -- show line numbers
+opt.belloff = "all" -- no bells, ever (the terminal beep is maddening)
 
 -- Indentation: 4-space soft tabs, the competitive-programming default.
 opt.tabstop = 4
@@ -24,26 +25,18 @@ opt.softtabstop = 4
 -- Allow backspacing over autoindent, line breaks and the start of insert.
 opt.backspace = "indent,eol,start"
 
--- C/C++ aware indentation. cinoptions is tuned so switch/case, function args
--- and continuation lines line up the way I like for contest code.
 opt.autoindent = true
-opt.cindent = true
-opt.cinoptions = "{0,1s,t0,n-2,p2s,(03s,=.5s,>1s,=1s,:1s"
 
-opt.undofile = true        -- persistent undo across sessions
-opt.incsearch = true       -- show matches as you type the search
-opt.hlsearch = true        -- highlight all matches
-opt.showmatch = true       -- briefly jump to the matching bracket
-opt.matchtime = 1          -- ...for 1/10s
+opt.undofile = true -- persistent undo across sessions
+opt.incsearch = true -- show matches as you type the search
+opt.hlsearch = true -- highlight all matches
+opt.showmatch = true -- briefly jump to the matching bracket
+opt.matchtime = 1 -- ...for 1/10s
 
 -- Use the system clipboard for all yanks/pastes. The official Windows Neovim
 -- build bundles win32yank.exe, so this "just works" out of the box — no "+
 -- prefix needed, and no extra setup required.
 opt.clipboard = "unnamedplus"
-
--- Leader is also set in init.lua (before plugins load); repeated here so this
--- file remains self-contained if read on its own.
-vim.g.mapleader = " "
 
 -- ----------------------------------------------------------------------------
 -- GUI font (Neovide). LazyVim's UI is full of Nerd Font icons; without a Nerd
@@ -55,24 +48,29 @@ vim.g.mapleader = " "
 -- ----------------------------------------------------------------------------
 vim.o.guifont = "JetBrainsMono NF:h11"
 
+-- Neovide's default cursor interpolates between positions for 150 ms. With a
+-- blue cursor highlight that looks like a blue smear, so keep movement direct.
+if vim.g.neovide then
+	vim.g.neovide_padding_top = 6
+	vim.g.neovide_padding_bottom = 0
+	vim.g.neovide_padding_left = 4
+	vim.g.neovide_padding_right = 4
+	vim.g.neovide_position_animation_length = 0
+	vim.g.neovide_cursor_animation_length = 0
+	vim.g.neovide_cursor_trail_size = 0
+	vim.g.neovide_cursor_animate_in_insert_mode = false
+	vim.g.neovide_cursor_animate_command_line = false
+	vim.g.neovide_cursor_antialiasing = false
+	vim.g.neovide_scroll_animation_length = 0
+	vim.g.neovide_scroll_animation_far_lines = 0
+	vim.g.neovide_cursor_vfx_mode = ""
+end
+
 -- ----------------------------------------------------------------------------
 -- Filetype: .typ must be recognised as Typst, or tinymist/typst-preview never
 -- attach. If `:set filetype?` on a .typ buffer doesn't say "typst", this block
 -- isn't loading (see the README troubleshooting section).
 -- ----------------------------------------------------------------------------
 vim.filetype.add({
-  extension = { typ = "typst" },
-})
-
--- ----------------------------------------------------------------------------
--- makeprg for C++ so <F6> (:make) compiles the current file. <F5> uses its own
--- vim.system-based build+run (see keymaps.lua); this is the lighter :make path.
--- Set per-buffer on the cpp filetype so it doesn't leak into Typst buffers.
--- %< expands to the current filename without its extension.
--- ----------------------------------------------------------------------------
-vim.api.nvim_create_autocmd("FileType", {
-  pattern = "cpp",
-  callback = function()
-    vim.opt_local.makeprg = "g++ -std=c++17 -O2 -Wall % -o %<.exe"
-  end,
+	extension = { typ = "typst" },
 })

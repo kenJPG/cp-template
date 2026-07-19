@@ -1,204 +1,254 @@
-# Neovim dev environment — native Windows dotfiles
+# Neovim technical IDE - native Windows dotfiles
 
-A one-clone, one-script setup for a full **Neovim-based dev environment on
-Windows 11**, used for two things:
+This repo is a Windows-native Neovim setup for three daily workflows:
 
-- **Competitive programming in C++** (clangd + a `<F5>` build-and-run button)
-- **Writing math notes / documents in Typst** (tinymist LSP + live preview in
-  your browser)
+- C++ competitive programming with a reliable `g++` build/run loop
+- Typst writing with Tinymist LSP, browser preview, and manual PDF export
+- Lightweight class notes in Typst or Markdown without a PKM framework
 
-Everything is scripted and idempotent. Clone this repo onto a fresh Windows
-machine, run **one script**, and you're fully configured. No WSL, no Linux VM,
-no second OS to keep in sync — everything runs natively on Windows.
-
----
-
-## Architecture
-
-```
-┌────────────────────────── Windows 11 ───────────────────────────┐
-│                                                                  │
-│   Neovim (LazyVim) ── clangd + tinymist + g++ (WinLibs) + typst │
-│        │                                                        │
-│        ├──► <F5> build+run ──► terminal split (interactive)     │
-│        └──► <leader>tp ──► typst-preview.nvim ──► your browser  │
-│                             (local HTTP + WebSocket server)      │
-│                                                                  │
-│   win32yank.exe (bundled with Neovim) ── clipboard, no setup     │
-└──────────────────────────────────────────────────────────────────┘
-```
-
-- **Neovim runs natively on Windows.** No WSL, no Linux VM.
-- **Typst preview renders in your default browser**, not inline in the
-  terminal. Inline terminal image rendering (the kitty graphics protocol) was
-  the original plan, but it depends on the terminal accurately reporting
-  per-cell pixel size — unreliable in practice, and a genuine dead end under
-  WSL specifically (see "Why not inline terminal preview?" below for the full
-  story, kept for the record). A local web server + browser tab sidesteps all
-  of that, and it's also what let this whole setup drop WSL entirely.
-- **The Neovim config lives in this repo** (LazyVim-based, Lua) and is
-  **symlinked** into `%LOCALAPPDATA%\nvim`, so editing it in the repo takes
-  effect live (after a restart of Neovim).
-- **Two separate C++ toolchains, on purpose**: `clangd` (LSP, from LLVM) for
-  editor diagnostics, and real **GCC** (via WinLibs/MinGW) for the actual
-  compile. Competitive-programming judges (Codeforces etc.) run GCC, and
-  contest templates lean on GCC-only features — `#include <bits/stdc++.h>`
-  and `#pragma GCC optimize/target` — that clang doesn't support the same way.
-  clangd's diagnostics are close enough to GCC's behavior to be useful despite
-  the mismatch.
-
-### Why not inline terminal preview?
-
-Kept here because it's a useful cautionary tale if you're tempted to revisit
-it: inline terminal image preview (via a terminal graphics protocol, and
-originally attempted through WSL2 + WezTerm specifically) depends on the
-terminal correctly reporting the pixel size of a single character cell. Under
-WSL2, the kernel's `TIOCGWINSZ` ioctl never fills in that pixel-size field —
-a still-open bug (see `microsoft/WSL#12265` if you want to check whether it's
-since been fixed) — which broke image sizing outright and, once patched
-around with an estimate, produced blurry or wrongly-scaled output with no
-reliable way to query the real value from inside WSL. Browser-based preview
-has none of these problems: the browser knows its own pixel dimensions fine.
-
----
-
-## Repo layout
-
-```
-.
-├── README.md                  # this file
-├── install.cmd                 # double-click this: elevates + runs install.ps1
-├── install.ps1                 # the one setup script (winget installs + symlink + plugin sync)
-└── nvim/                       # symlinked to %LOCALAPPDATA%\nvim
-    ├── init.lua
-    └── lua/
-        ├── config/
-        │   ├── options.lua    # vim.opt settings + .typ filetype
-        │   ├── keymaps.lua    # custom keymaps (F5 build+run, etc.)
-        │   └── autopairs.lua  # custom smart auto-pair engine
-        └── plugins/
-            ├── editor.lua     # disables mini.pairs (we use our own engine)
-            ├── completion.lua # disables blink.cmp's ghost-text preview
-            ├── typst.lua      # tinymist LSP + typst-preview.nvim (browser)
-            ├── cpp.lua        # clangd
-            └── colorscheme.lua# light theme (catppuccin latte)
-```
-
----
+Everything runs on Windows directly: Neovim, Neovide, GCC, clangd, Typst, and
+Tinymist. No WSL or Linux VM is required.
 
 ## Install
 
-**Double-click `install.cmd`** in the repo root. It relaunches `install.ps1`
-elevated (you'll get the normal UAC prompt) and leaves the window open so you
-can read the log. (Double-clicking the `.ps1` directly just opens Notepad —
-that's a Windows security default — hence the `.cmd` wrapper.)
+Double-click `install.cmd` (recommended). It runs machine setup with UAC, then
+returns to your normal user before installing editor plugins.
 
-Or, equivalently, from an **elevated PowerShell** prompt in the repo root:
+The manual equivalent is two commands: first run this in an elevated PowerShell:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-This installs, all via `winget` (idempotent — already-installed packages are
-skipped):
+Then close the elevated shell and run this in a normal PowerShell:
 
-- **Neovim** — also bundles `win32yank.exe`, so clipboard support needs no
-  extra setup at all.
-- **Neovide** — GUI frontend for Neovim; the recommended way to launch (see
-  below).
-- **JetBrainsMono Nerd Font** — LazyVim's UI icons need a Nerd Font.
-- **Typst** — the compiler CLI (for `<leader>te` PDF export).
-- **Tinymist** — the Typst language server.
-- **clangd** — the C++ language server.
-- **WinLibs (GCC/MinGW)** — a real `g++`, not clang. See the architecture
-  note above for why this matters.
-- **ripgrep, fd** — used by LazyVim's fuzzy pickers.
+```powershell
+powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1
+```
 
-Then it symlinks `nvim/` from this repo to `%LOCALAPPDATA%\nvim` (backing up
-any existing config it finds first), and force-syncs all Neovim plugins
-headlessly so the first real launch isn't the one waiting on downloads.
+Both phases are idempotent. Together they will:
 
-When it finishes, launch **Neovide** from the Start menu (recommended), or run
-`nvim` from a **new Windows Terminal** window.
+- install Git, Neovim, Neovide, JetBrainsMono Nerd Font, Typst, Tinymist,
+clangd, WinLibs `g++`, tree-sitter CLI, StyLua, ripgrep, and fd via
+  `winget`
+- refresh PATH in-process and fail clearly if required tools are still missing
+- symlink `nvim/` from this repo to `%LOCALAPPDATA%\nvim`, backing up any
+  existing config first
+- return to the normal user before running plugin code
+- configure Neovide to open in your Windows Desktop directory with direct,
+  non-animated cursor and scrolling behavior
+- restore/install the lockfile's pinned plugins, synchronously install core
+  parsers that build reliably with WinLibs, inspect plugin task errors, and
+  verify a clean second start
 
-> **Do not run `nvim` inside plain `cmd.exe`** (the legacy console/conhost).
-> Its fonts can't render LazyVim's Nerd Font icons (you get `?`-in-diamond
-> boxes everywhere) and its terminal input handling is flaky — typing into the
-> `<F5>` run split can silently not work. Neovide is a native GUI (the modern
-> GVim equivalent): GPU-accelerated, launches from the Start menu, no terminal
-> in the loop at all. Windows Terminal also works fine — set its font to
-> `JetBrainsMono NF` (installed by this script) or the bundled
-> `Cascadia Code NF`.
+Launch **Neovide** after install, or start `nvim` from a fresh Windows Terminal
+window. Neovide is the recommended daily driver because it avoids legacy console
+input/font issues and already uses the configured Nerd Font. Start-menu launches
+open in your Windows Desktop directory.
 
----
+## Daily workflows
 
-## Day-to-day usage
+### 1) C++: build, quickfix, and one reusable scratch panel
 
-`<leader>` is the **spacebar**.
+Open a `*.cpp` buffer and use the buffer-local keys below:
 
-| Key                | Does                                                        |
-| ------------------ | ---------------------------------------------------------- |
-| `<F5>`             | Save, compile the current C++ file (`g++ -std=c++17 -O2 -Wall`), and if it compiles, run it in an interactive terminal split |
-| `<F6>`             | Save and `:make` the current C++ file                      |
-| `<leader>tp`       | Start Typst preview (opens in your browser)                |
-| `<leader>tq`       | Stop Typst preview                                          |
-| `<leader>te`       | Export the current Typst file to PDF and open it            |
-| `<leader>c`        | Toggle a leading `//` comment on the line / selection      |
-| `<leader><space>`  | Clear search highlight                                      |
-| `<leader>q`        | Quit all, without saving                                    |
-| `<C-BS>`           | (insert / command mode) delete previous word               |
+- `<F6>` - save and build asynchronously
+- `<F5>` - save, build asynchronously, then open a bottom input panel for the compiled `.exe`
+- `<leader>it` - insert the contest template into a blank C++ buffer
+- `<leader>rx` - stop the running program if needed and close its run panel
 
-**Clipboard just works.** `clipboard=unnamedplus` is on, and Neovim's Windows
-build bundles `win32yank.exe`, so a plain `y` copies to the real Windows
-clipboard and `p` pastes from it — no `"+` prefix, no extra setup.
+Details that matter:
 
-**Motions are plain vim.** `h/j/k/l` and `i` are unchanged (an old custom
-`ijkl` scheme was deliberately dropped).
+- `g++` is invoked through `vim.system({...})`, not a shell string, so paths
+   with spaces are preserved.
+- The compile command is `g++ -std=gnu++20 -O2 -Wall -Wextra`.
+- clangd queries that same resolved `g++.exe` for MinGW/libstdc++ headers, so
+  `bits/stdc++.h`, `cout`, and other contest-standard symbols diagnose correctly.
+- C/C++ format-on-save is disabled, and clangd has no fallback style, so compact
+  contest macros and the inserted template are preserved exactly. A project can
+  still opt into formatting by providing its own `.clang-format`.
+- Build artifacts go under `stdpath('cache')/cpp-build/`, not beside the source
+  file.
+- Compile failures populate quickfix and open it automatically.
+- Successful runs reuse one bottom scratch area built from `nvim_create_buf(false, true)`.
+- After a successful build, that panel opens as a normal editable input buffer.
+  Type or paste stdin directly, then press `<F5>` in the panel to submit all of
+  its text through `vim.system({...}, { stdin = input })`.
+- The input panel stays plain: no Terminal mode, no PTY, no EOF keystroke, no
+  clipboard remaps. Empty input is valid and submits as an empty string.
+- After submission, the same bottom area becomes a read-only output buffer that
+  shows stdout, adds a `[stderr]` section when needed, and appends `[exit N]`
+  for nonzero exits.
+- While focused on the input panel, `<Esc>` returns to the launching source
+  window, `<F5>` submits, and `<C-q>` closes the panel.
+- While focused on the output panel, `<F5>` returns to the preserved input for a
+  rerun, `<Esc>` returns to the source window, and `q` / `<C-q>` close the panel.
+- A previous still-running program is killed and awaited before rebuilding the
+  same cached executable path, so repeated runs stay deterministic and do not
+  leave stale callbacks or locked `.exe` files behind.
+- Large motions such as `gg` and `G` are immediate; both Neovide animation and
+  LazyVim's inherited Snacks smooth scrolling are disabled.
+- The editor uses Neovim's built-in `vim` colorscheme on a light background,
+  matching the classic native gVim syntax colors without a theme plugin.
+- Indentation guides and automatic pairs are disabled for plain, predictable
+  Vim editing. Neovide adds only 6 px top and 4 px side padding.
 
----
+Buffer-local commands for the same flow:
 
-## Troubleshooting
+- `:CppBuild`
+- `:CppBuildRun`
+- `:CppTemplate`
+- `:CppClose`
 
-**`?`-in-diamond symbols all over the UI**
-The font can't render LazyVim's Nerd Font icons. Launch via Neovide (which is
-configured to use `JetBrainsMono NF`), or if you're in a terminal, make sure
-it's Windows Terminal with a Nerd Font set — not plain `cmd.exe`, whose fonts
-can't do this at all.
+The template action refuses to overwrite a nonblank file and leaves the cursor
+inside `solve()`. C++ actions are buffer-local; Markdown, Typst, and other
+filetypes do not receive them.
 
-**`<F5>` opens the run split but typing does nothing**
-Almost always: you're running `nvim` inside legacy `cmd.exe`/conhost, whose
-ConPTY input handling is unreliable. Use Neovide or Windows Terminal. (The
-run split is a normal terminal buffer — if you ever land in Normal mode, `i`
-re-enters typing mode, and `<C-\><C-n>` gets you back out.)
+### 2) Typst: preview in browser, export on demand
 
-**`E492: Not an editor command: MasonInstall`**
-The Mason command hasn't been lazy-loaded yet. Run `:Mason` once to force the
-plugin to load, then the `:MasonInstall ...` command becomes available.
+Open a `*.typ` file and use:
 
-**`<leader>tp` pauses for a while the first time**
-Expected — `typst-preview.nvim` downloads its own pinned copies of `tinymist`
-and `websocat` into `stdpath('data')/typst-preview` on first use. Needs
-`curl`, which ships built into Windows 10 (1803+) and Windows 11 by default.
-Subsequent runs are instant.
+- `<leader>tp` - toggle browser preview
+- `<leader>tq` - stop browser preview explicitly
+- `<leader>te` - save, export PDF asynchronously, and open the PDF
 
-**No browser tab opens**
-Check `:messages` for errors from `typst-preview.nvim`. Confirm `typst
---version` works from a plain terminal (proves the PATH/install is fine
-outside Neovim). If a tab still doesn't open, the URL is also printed in
-`:messages` — open it manually to confirm the server side is working.
+Notes:
 
-**`no clipboard provider` / yanks don't reach elsewhere**
-Usually a stale Neovim session started *before* Neovim itself was
-(re)installed. Fully **restart Neovim** (not just `:q` a window). Verify with
-`:checkhealth provider` — it should report `win32yank.exe` found.
+- Tinymist stays configured as a single-file-friendly LSP with `typstyle`
+  formatting.
+- Preview remains browser-based through `typst-preview.nvim`; no inline terminal
+  graphics are involved.
+- PDF export uses `vim.system({...})`, so source/output paths stay path-safe.
+- Export failures and automatic-open failures are surfaced clearly.
 
-**`.typ` files get no LSP or preview**
-Check that Neovim sees them as Typst: open a `.typ` file and run
-`:set filetype?` — it must report `filetype=typst`. If not, the
-`vim.filetype.add({ extension = { typ = "typst" } })` block in
-`nvim/lua/config/options.lua` isn't loading. Also confirm `tinymist` is on
-PATH (`tinymist --version` in a plain terminal).
+### 3) Notes: quick class-note creation and search
 
-**`g++`/`gdb`/etc. not found right after running `install.ps1`**
-`winget` updates the PATH for *new* shells, not the one that's already open.
-Open a new terminal window and try again.
+Default notes root: `~/Documents/Notes`
+
+- `<leader>nn` - create a timestamped Typst class note
+- `<leader>nf` - find an existing `.typ` or `.md` note
+- `:NotesNew [title]` - create/open a note directly
+- `:NotesFind` - open the notes picker
+
+Behavior:
+
+- New class notes are stored under `~/Documents/Notes/class/<year>/<month>/`
+- The title is prompted when omitted and turned into a safe filename slug
+- Parent directories are created automatically
+- Notes use a small Typst template with a title, timestamp, summary, and notes
+  section
+- If Snacks is available, note search uses its picker; otherwise it falls back
+  to Neovim's built-in UI selection
+
+Markdown and Typst buffers also get conservative local prose settings for class
+notes: `wrap`, `linebreak`, `breakindent`, `spell`, and `spelllang=en_us`. They
+are applied buffer-locally and do not leak into C++ buffers.
+
+## Key reference
+
+`<leader>` is the spacebar.
+
+| Key | Scope | Action |
+| --- | --- | --- |
+| `<F5>` | `cpp` buffer only | Build, then open the C++ input panel |
+| `<F6>` | `cpp` buffer only | Build only |
+| `<leader>it` | `cpp` buffer only | Insert contest template into a blank file |
+| `<leader>rx` | `cpp` buffer only | Stop and close the C++ run panel |
+| `<leader>tp` | `typst` buffer only | Toggle Typst browser preview |
+| `<leader>tq` | `typst` buffer only | Stop Typst preview |
+| `<leader>te` | `typst` buffer only | Export PDF and open it |
+| `<leader>nn` | global | Create a class note |
+| `<leader>nf` | global | Find an existing note |
+| `gcc` | normal | Toggle comment on the current line |
+| `gc` | normal / visual | Toggle comment with a motion or selection |
+| `<leader><space>` | global | Clear search highlight |
+| `<leader>q` | global | Quit all without saving |
+| `<C-BS>` | insert / command | Delete previous word |
+| `<Esc>` | C++ input/output panel | Return to the source editor |
+| `<F5>` | C++ input panel | Submit the full buffer as stdin |
+| `<C-q>` | C++ input panel | Close the run panel |
+| `<F5>` | C++ output panel | Reopen the preserved input for rerun |
+| `q` / `<C-q>` | C++ output panel | Close the run panel |
+
+## Validation and troubleshooting
+
+Start with:
+
+```vim
+:checkhealth
+```
+
+Then verify the external tools directly in a new PowerShell or Windows Terminal:
+
+```powershell
+git --version
+nvim --version
+neovide --version
+gcc --version
+g++ --version
+clangd --version
+typst --version
+tinymist --version
+tree-sitter --version
+stylua --version
+rg --version
+fd --version
+curl --version
+```
+
+Common issues:
+
+- **Installer stops with a missing-tools list**: one or more `winget` installs
+  did not land on PATH. Re-run `install.cmd` after
+  fixing the reported package.
+- **`<F5>` or `<F6>` does nothing in a non-C++ buffer**: expected. Those maps are
+  buffer-local to `cpp` only.
+- **Compile errors disappear too quickly**: they should now be in quickfix. Use
+  `:copen` if you closed the list.
+- **clangd says `bits/stdc++.h` or `cout` is missing**: rerun `bootstrap.ps1` to
+  regenerate `%LOCALAPPDATA%\clangd\config.yaml` from the active `g++.exe`, then
+  restart Neovide. `:LspRestart` is enough after the config already exists.
+- **The C++ panel is still on the input buffer**: expected until you press
+  `<F5>` inside that panel. The source-buffer `<F5>` only compiles and opens the
+  editable stdin scratch.
+- **A program reads until EOF**: expected. The panel sends the entire buffer as a
+  string, so just type or paste the full test case and press `<F5>` once.
+- **You want to tweak the same input again**: from the output panel, press `<F5>`
+  to reopen the preserved stdin text, edit it normally, and submit again.
+- **Typst preview's first launch is slow**: expected. It uses the system
+  Tinymist, but `typst-preview.nvim` still fetches its websocat helper on first
+  use and needs `curl` available.
+- **PDF export succeeds but no viewer opens**: the PDF path is shown in the
+  notification; open it manually and check the Windows file association.
+- **No Typst LSP or preview in `.typ` files**: confirm `:set filetype?` reports
+  `typst`, then check `tinymist --version` and `typst --version` outside Neovim.
+
+## Headless smoke tests
+
+Run the lightweight config tests from the repo root:
+
+```powershell
+nvim --headless -u NONE "+lua dofile('tests/run.lua')" +qa
+nvim --headless -u NONE "+lua dofile('tests/cpp_e2e.lua')" +qa
+nvim --headless -u NONE "+lua dofile('tests/typst_e2e.lua')" +qa
+nvim --headless -u NONE "+lua dofile('tests/notes_e2e.lua')" +qa
+powershell -ExecutionPolicy Bypass -File .\tests\bootstrap_failure.ps1
+```
+
+They assert that:
+
+- C++ `<F5>` / `<F6>` mappings are buffer-local and absent from Markdown/Typst
+- prose options are local to Markdown/Typst and do not leak into C++
+- the C++ compile argv keeps a source path with spaces as a single argv entry
+- the real C++ runner compiles from a path with spaces, opens the scratch input
+  panel, submits `10\n11` as stdin, observes `42` in the read-only output panel,
+  preserves input for rerun, allows empty stdin, and safely rebuilds the same
+  cached executable while cancelling a previous run on both Windows and Linux
+- the real Typst export callback compiles a math note from a path with spaces
+  and produces a non-empty PDF
+- repeated same-title note creation produces unique files instead of overwriting
+  an existing note
+- bootstrap Lua/module failures force a nonzero Neovim process exit
+
+The end-to-end tests print a skip message rather than failing when their required
+compiler is not available.
