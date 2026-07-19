@@ -4,7 +4,8 @@
 -- Keeps the competitive-programming task flow out of keymaps.lua:
 --   * async compile with vim.system(argv)
 --   * diagnostics parsed into quickfix on failure
---   * one reusable scratch panel for stdin submission and stdout/stderr output
+--   * one reusable panel: scratch buffer for stdin, live terminal for the run
+--     (stdin stays open after the pre-fed input, so interactive problems work)
 -- ============================================================================
 
 local M = {}
@@ -13,6 +14,7 @@ local augroup = vim.api.nvim_create_augroup("cp_template_cpp_tasks", { clear = t
 
 local state = {
 	setup_done = false,
+	panel_position = (vim.g.cpp_panel_position == "right") and "right" or "bottom",
 	panel_bufnr = nil,
 	panel_winid = nil,
 	panel_kind = nil,
@@ -24,7 +26,7 @@ local state = {
 	build_generation = 0,
 	build_system = nil,
 	run_generation = 0,
-	run_system = nil,
+	run_job = nil,
 }
 
 local errorformat = table.concat({
@@ -45,18 +47,6 @@ local function split_lines(text)
 		return {}
 	end
 	return vim.split(text, "\n", { plain = true, trimempty = true })
-end
-
-local function text_to_lines(text)
-	if not text or text == "" then
-		return {}
-	end
-
-	local lines = vim.split(text, "\n", { plain = true, trimempty = false })
-	if lines[#lines] == "" then
-		table.remove(lines, #lines)
-	end
-	return lines
 end
 
 local function is_valid_buf(bufnr)
@@ -112,7 +102,7 @@ local function panel_name(kind)
 	if kind == "input" then
 		return "cpp-run://input [F5 submit | Esc editor | Ctrl-Q close]"
 	end
-	return "cpp-run://output [F5 rerun | Esc editor | q/Ctrl-Q close]"
+	return "cpp-run://output [type = stdin | F5 rerun | q/Ctrl-Q close]"
 end
 
 local function remember_input_lines()
@@ -125,18 +115,18 @@ local function remember_input_lines()
 	end
 end
 
-local function stop_run_system()
-	local system = state.run_system
-	if not system then
+local function stop_run_job()
+	local job = state.run_job
+	if not job then
 		return true
 	end
 
 	state.run_generation = state.run_generation + 1
-	state.run_system = nil
+	state.run_job = nil
 
-	pcall(system.kill, system, 15)
-	local ok, res = pcall(system.wait, system, 5000)
-	if not ok or not res then
+	pcall(vim.fn.jobstop, job)
+	local waited = vim.fn.jobwait({ job }, 5000)
+	if waited[1] == -1 then
 		notify("Previous C++ program did not exit; build cancelled.", vim.log.levels.ERROR, "C++ run")
 		return false
 	end
@@ -188,7 +178,7 @@ function M.close_panel()
 	vim.cmd("stopinsert")
 	remember_input_lines()
 	stop_build_system()
-	stop_run_system()
+	stop_run_job()
 
 	local panel_winid = state.panel_winid
 	local panel_bufnr = state.panel_bufnr
@@ -241,6 +231,12 @@ local function set_input_maps(bufnr)
 		M.close_panel,
 		vim.tbl_extend("force", opts, { desc = "Close C++ run panel" })
 	)
+	vim.keymap.set(
+		"n",
+		"<leader>rp",
+		M.toggle_panel_position,
+		vim.tbl_extend("force", opts, { desc = "Toggle C++ panel bottom/right" })
+	)
 end
 
 local function set_output_maps(bufnr)
@@ -249,6 +245,24 @@ local function set_output_maps(bufnr)
 	vim.keymap.set("n", "<F5>", M.rerun_input, vim.tbl_extend("force", opts, { desc = "Edit C++ input again" }))
 	vim.keymap.set("n", "<C-q>", M.close_panel, vim.tbl_extend("force", opts, { desc = "Close C++ run panel" }))
 	vim.keymap.set("n", "q", M.close_panel, vim.tbl_extend("force", opts, { desc = "Close C++ run panel" }))
+	vim.keymap.set(
+		"n",
+		"<leader>rp",
+		M.toggle_panel_position,
+		vim.tbl_extend("force", opts, { desc = "Toggle C++ panel bottom/right" })
+	)
+	-- Terminal-mode: Esc leaves live typing, F5/Ctrl-Q act like normal mode.
+	vim.keymap.set("t", "<Esc>", [[<C-\><C-n>]], vim.tbl_extend("force", opts, { desc = "Leave C++ terminal input" }))
+	vim.keymap.set("t", "<F5>", M.rerun_input, vim.tbl_extend("force", opts, { desc = "Edit C++ input again" }))
+	vim.keymap.set("t", "<C-q>", M.close_panel, vim.tbl_extend("force", opts, { desc = "Close C++ run panel" }))
+end
+
+local function apply_panel_size()
+	if state.panel_position == "right" then
+		vim.cmd("vertical resize 60")
+	else
+		vim.cmd("resize 15")
+	end
 end
 
 local function ensure_panel_window()
@@ -258,10 +272,31 @@ local function ensure_panel_window()
 
 	local base_winid = is_valid_win(state.editor_winid) and state.editor_winid or vim.api.nvim_get_current_win()
 	vim.api.nvim_set_current_win(base_winid)
-	vim.cmd("botright split")
-	vim.cmd("resize 15")
+	if state.panel_position == "right" then
+		vim.cmd("botright vsplit")
+	else
+		vim.cmd("botright split")
+	end
+	apply_panel_size()
 	state.panel_winid = vim.api.nvim_get_current_win()
 	return state.panel_winid
+end
+
+function M.toggle_panel_position()
+	state.panel_position = (state.panel_position == "bottom") and "right" or "bottom"
+	vim.g.cpp_panel_position = state.panel_position
+
+	if is_valid_win(state.panel_winid) then
+		local previous_winid = vim.api.nvim_get_current_win()
+		vim.api.nvim_set_current_win(state.panel_winid)
+		vim.cmd(state.panel_position == "right" and "wincmd L" or "wincmd J")
+		apply_panel_size()
+		if previous_winid ~= state.panel_winid and is_valid_win(previous_winid) then
+			vim.api.nvim_set_current_win(previous_winid)
+		end
+	end
+
+	notify("C++ run panel: " .. state.panel_position, vim.log.levels.INFO, "C++ run")
 end
 
 local function prepare_panel_buffer(kind, lines)
@@ -269,26 +304,25 @@ local function prepare_panel_buffer(kind, lines)
 	local winid = ensure_panel_window()
 	local bufnr = vim.api.nvim_create_buf(false, true)
 
-	vim.bo[bufnr].buftype = "nofile"
 	vim.bo[bufnr].swapfile = false
 	vim.bo[bufnr].bufhidden = "wipe"
-	vim.bo[bufnr].modifiable = true
-	vim.bo[bufnr].readonly = false
 
-	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, (#lines > 0 and lines or { "" }))
 	if kind == "input" then
+		vim.bo[bufnr].buftype = "nofile"
+		vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, (#lines > 0 and lines or { "" }))
 		set_input_maps(bufnr)
 	else
+		-- Left empty and untyped: submit_input turns it into a terminal buffer.
 		set_output_maps(bufnr)
-		vim.bo[bufnr].modifiable = false
-		vim.bo[bufnr].readonly = true
 	end
 
 	vim.api.nvim_win_set_buf(winid, bufnr)
 	if is_valid_buf(previous_bufnr) and previous_bufnr ~= bufnr then
 		pcall(vim.api.nvim_buf_delete, previous_bufnr, { force = true })
 	end
-	pcall(vim.api.nvim_buf_set_name, bufnr, panel_name(kind))
+	if kind == "input" then
+		pcall(vim.api.nvim_buf_set_name, bufnr, panel_name(kind))
+	end
 	vim.fn.setbufvar(bufnr, "&buflisted", 0)
 	state.panel_bufnr = bufnr
 	state.panel_winid = winid
@@ -297,44 +331,18 @@ local function prepare_panel_buffer(kind, lines)
 	return bufnr, winid
 end
 
-local function update_output_buffer(lines)
-	if state.panel_kind ~= "output" or not is_valid_buf(state.panel_bufnr) then
-		return
+-- Input lines to feed the terminal: "\r" is Enter for both ConPTY and Unix
+-- ptys (ICRNL). Trailing blank lines are dropped so they don't become extra
+-- Enter presses; an all-blank input feeds nothing.
+local function input_payload(lines)
+	local kept = vim.deepcopy(lines or {})
+	while #kept > 0 and kept[#kept] == "" do
+		table.remove(kept, #kept)
 	end
-
-	vim.bo[state.panel_bufnr].modifiable = true
-	vim.bo[state.panel_bufnr].readonly = false
-	vim.api.nvim_buf_set_lines(state.panel_bufnr, 0, -1, false, (#lines > 0 and lines or { "(no output)" }))
-	vim.bo[state.panel_bufnr].modifiable = false
-	vim.bo[state.panel_bufnr].readonly = true
-end
-
-local function render_run_output(res)
-	local lines = {}
-	local stdout = text_to_lines(res.stdout)
-	local stderr = text_to_lines(res.stderr)
-
-	if #stdout > 0 then
-		vim.list_extend(lines, stdout)
+	if #kept == 0 then
+		return ""
 	end
-	if #stderr > 0 then
-		if #lines > 0 then
-			lines[#lines + 1] = ""
-		end
-		lines[#lines + 1] = "[stderr]"
-		vim.list_extend(lines, stderr)
-	end
-	if res.code ~= 0 then
-		if #lines > 0 then
-			lines[#lines + 1] = ""
-		end
-		lines[#lines + 1] = string.format("[exit %d]", res.code)
-	end
-	if #lines == 0 then
-		lines = { "(no output)" }
-	end
-
-	return lines
+	return table.concat(kept, "\r") .. "\r"
 end
 
 local function show_input_panel(source_path, output_path, editor_winid, editor_bufnr)
@@ -356,7 +364,7 @@ function M.rerun_input()
 		notify("No compiled C++ program is ready to rerun.", vim.log.levels.WARN, "C++ run")
 		return
 	end
-	if not stop_run_system() then
+	if not stop_run_job() then
 		return
 	end
 
@@ -375,45 +383,60 @@ function M.submit_input()
 	end
 
 	remember_input_lines()
-	if not stop_run_system() then
+	if not stop_run_job() then
 		return
 	end
 	if not stop_build_system() then
 		return
 	end
 
-	local input = table.concat(state.input_lines, "\n")
+	local payload = input_payload(state.input_lines)
 	local cwd = vim.fn.fnamemodify(state.source_path, ":h")
 	state.run_generation = state.run_generation + 1
 	local generation = state.run_generation
-	local _, winid = prepare_panel_buffer("output", { "Running..." })
+	local bufnr, winid = prepare_panel_buffer("output")
 
-	local system
+	-- jobstart(term = true) attaches to the current buffer, so focus the
+	-- fresh panel buffer first. Stdin stays open after the pre-fed payload,
+	-- which is what makes interactive problems work: keep typing in the
+	-- terminal to continue the dialogue.
+	vim.api.nvim_set_current_win(winid)
+	local job
 	local ok, err = pcall(function()
-		system = vim.system({ state.output_path }, { cwd = cwd, text = true, stdin = input }, function(res)
-			vim.schedule(function()
-				if generation ~= state.run_generation then
-					return
-				end
+		job = vim.fn.jobstart({ state.output_path }, {
+			term = true,
+			cwd = cwd,
+			on_exit = function(_, code, _)
+				vim.schedule(function()
+					if generation ~= state.run_generation then
+						return
+					end
 
-				if state.run_system == system then
-					state.run_system = nil
-				end
-				update_output_buffer(render_run_output(res))
-			end)
-		end)
+					if state.run_job == job then
+						state.run_job = nil
+					end
+					if code ~= 0 then
+						notify(string.format("Program exited with code %d.", code), vim.log.levels.WARN, "C++ run")
+					end
+				end)
+			end,
+		})
 	end)
 
-	if not ok then
-		state.run_system = nil
-		update_output_buffer({ "Failed to start compiled program: " .. tostring(err), "", "[exit 1]" })
-		notify("Failed to start compiled program: " .. tostring(err), vim.log.levels.ERROR, "C++ run")
+	if not ok or not job or job <= 0 then
+		state.run_job = nil
+		local message = "Failed to start compiled program: " .. tostring(ok and job or err)
+		vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, { message })
+		notify(message, vim.log.levels.ERROR, "C++ run")
 		return
 	end
 
-	state.run_system = system
-	vim.api.nvim_set_current_win(winid)
-	vim.api.nvim_win_set_cursor(winid, { 1, 0 })
+	state.run_job = job
+	pcall(vim.api.nvim_buf_set_name, bufnr, panel_name("output"))
+	if payload ~= "" then
+		vim.fn.chansend(job, payload)
+	end
+	vim.cmd("startinsert")
 end
 
 local function compile_current_buffer(on_success)
@@ -427,7 +450,7 @@ local function compile_current_buffer(on_success)
 		notify("Open a saved C++ source file before compiling.", vim.log.levels.ERROR, "C++ build")
 		return
 	end
-	if not stop_run_system() then
+	if not stop_run_job() then
 		return
 	end
 	if not stop_build_system() then
@@ -588,6 +611,12 @@ local function attach_to_cpp_buffer(bufnr)
 		vim.tbl_extend("force", opts, { desc = "C++: insert template" })
 	)
 	vim.keymap.set("n", "<leader>rx", M.close_panel, vim.tbl_extend("force", opts, { desc = "C++: close run panel" }))
+	vim.keymap.set(
+		"n",
+		"<leader>rp",
+		M.toggle_panel_position,
+		vim.tbl_extend("force", opts, { desc = "C++: toggle panel bottom/right" })
+	)
 
 	vim.api.nvim_buf_create_user_command(bufnr, "CppBuild", M.build, { desc = "Compile current C++ file" })
 	vim.api.nvim_buf_create_user_command(
@@ -607,6 +636,12 @@ local function attach_to_cpp_buffer(bufnr)
 		"CppClose",
 		M.close_panel,
 		{ desc = "Stop and close the C++ run panel" }
+	)
+	vim.api.nvim_buf_create_user_command(
+		bufnr,
+		"CppPanelSide",
+		M.toggle_panel_position,
+		{ desc = "Toggle the C++ run panel between bottom and right" }
 	)
 end
 

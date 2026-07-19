@@ -1,12 +1,33 @@
 local bootstrap = dofile("tests/bootstrap.lua")
 
-bootstrap.load_config()
-bootstrap.load_autocmds()
-
 if vim.fn.executable("g++") ~= 1 then
 	print("tests/cpp_e2e.lua: skipped (g++ not available)")
 	return
 end
+
+-- ConPTY only delivers terminal stdin once a UI is attached, so the run
+-- terminal cannot be driven from a plain --headless process. Re-run this
+-- file inside an embedded nvim that has a (virtual) UI attached.
+if #vim.api.nvim_list_uis() == 0 then
+	local chan = vim.fn.jobstart({ vim.v.progpath, "--embed", "-u", "NONE" }, {
+		rpc = true,
+		cwd = bootstrap.repo_root,
+	})
+	if chan <= 0 then
+		error("failed to start embedded nvim for the UI-attached C++ e2e run", 0)
+	end
+	vim.rpcrequest(chan, "nvim_ui_attach", 120, 35, {})
+	local ok, err = pcall(vim.rpcrequest, chan, "nvim_exec_lua", "dofile('tests/cpp_e2e.lua')", {})
+	pcall(vim.fn.jobstop, chan)
+	if not ok then
+		error(err, 0)
+	end
+	print("tests/cpp_e2e.lua: ok")
+	return
+end
+
+bootstrap.load_config()
+bootstrap.load_autocmds()
 
 local cpp_tasks = require("config.cpp_tasks")
 
@@ -72,8 +93,12 @@ vim.fn.writefile({
 	"#include <iostream>",
 	"#include <thread>",
 	"int main() {",
-	"  long long sum = 0, x = 0;",
-	"  while (std::cin >> x) sum += x;",
+	"  long long n = 0, sum = 0, x = 0;",
+	"  std::cin >> n;",
+	"  for (long long i = 0; i < n; ++i) {",
+	"    std::cin >> x;",
+	"    sum += x;",
+	"  }",
 	"  std::this_thread::sleep_for(std::chrono::milliseconds(1200));",
 	"  std::cout << (sum * 2) << std::endl;",
 	"  return 0;",
@@ -123,6 +148,14 @@ local ok, err = xpcall(function()
 		"input insert Ctrl-Q close mapping should exist"
 	)
 
+	-- Panel position toggle: bottom split (col layout) <-> right split (row layout).
+	assert_equal(vim.fn.winlayout()[1], "col", "run panel should start as a bottom split")
+	cpp_tasks.toggle_panel_position()
+	assert_equal(vim.fn.winlayout()[1], "row", "toggling should move the run panel to the right side")
+	assert_true(vim.api.nvim_win_is_valid(input_winid), "toggling position should keep the panel window alive")
+	cpp_tasks.toggle_panel_position()
+	assert_equal(vim.fn.winlayout()[1], "col", "toggling again should move the run panel back to the bottom")
+
 	vim.api.nvim_set_current_win(input_winid)
 	cpp_tasks.return_to_editor()
 	local returned_to_editor = vim.wait(1000, function()
@@ -131,31 +164,33 @@ local ok, err = xpcall(function()
 	assert_true(returned_to_editor, "input panel Escape did not focus the launching C++ editor")
 
 	vim.api.nvim_set_current_win(input_winid)
-	vim.api.nvim_buf_set_lines(input_bufnr, 0, -1, false, { "10", "11" })
+	vim.api.nvim_buf_set_lines(input_bufnr, 0, -1, false, { "2", "10 11" })
 	cpp_tasks.submit_input()
 
 	local output_ready, output_bufnr, output_winid = wait_for_panel("output", 5000)
-	assert_true(output_ready, "timed out waiting for the C++ output panel after submitting input")
+	assert_true(output_ready, "timed out waiting for the C++ run terminal after submitting input")
+	assert_equal(
+		vim.api.nvim_get_option_value("buftype", { buf = output_bufnr }),
+		"terminal",
+		"run panel should be a terminal buffer"
+	)
 	assert_equal(
 		vim.api.nvim_get_option_value("modifiable", { buf = output_bufnr }),
 		false,
-		"output panel should be read-only"
+		"run terminal should not be text-editable"
 	)
 	assert_true(has_map(output_bufnr, "n", "<Esc>", "Return to C++ editor"), "output Escape mapping should exist")
 	assert_true(has_map(output_bufnr, "n", "<F5>", "Edit C++ input again"), "output F5 rerun mapping should exist")
 	assert_true(has_map(output_bufnr, "n", "q", "Close C++ run panel"), "output q close mapping should exist")
 	assert_true(has_map(output_bufnr, "n", "<C-Q>", "Close C++ run panel"), "output Ctrl-Q close mapping should exist")
+	assert_true(has_map(output_bufnr, "t", "<Esc>"), "terminal Escape mapping should exist")
+	assert_true(has_map(output_bufnr, "t", "<F5>", "Edit C++ input again"), "terminal F5 rerun mapping should exist")
+	assert_true(has_map(output_bufnr, "t", "<C-Q>", "Close C++ run panel"), "terminal Ctrl-Q close mapping should exist")
 
 	local saw_answer = vim.wait(10000, function()
 		return panel_text(output_bufnr):match("42") ~= nil
 	end, 50)
 	assert_true(saw_answer, "timed out waiting for output containing 42")
-	assert_equal(panel_text(output_bufnr), "42", "output panel should show the program stdout")
-	assert_equal(
-		vim.api.nvim_get_option_value("modifiable", { buf = output_bufnr }),
-		false,
-		"output panel should remain read-only"
-	)
 
 	vim.api.nvim_set_current_win(output_winid)
 	cpp_tasks.return_to_editor()
@@ -171,7 +206,7 @@ local ok, err = xpcall(function()
 	assert_true(rerun_input_ready, "output F5 rerun did not restore the input panel")
 	assert_equal(
 		vim.api.nvim_buf_get_lines(rerun_input_bufnr, 0, -1, false),
-		{ "10", "11" },
+		{ "2", "10 11" },
 		"rerun input panel should preserve the last submitted stdin"
 	)
 
@@ -186,7 +221,7 @@ local ok, err = xpcall(function()
 	assert_true(repeat_source_ready, "repeating source F5 should reopen the same-path input panel")
 	assert_equal(
 		vim.api.nvim_buf_get_lines(repeat_source_bufnr, 0, -1, false),
-		{ "10", "11" },
+		{ "2", "10 11" },
 		"repeating source F5 should preserve the previous input text"
 	)
 
@@ -195,9 +230,9 @@ local ok, err = xpcall(function()
 	local running_output_ready, running_output_bufnr, running_output_winid = wait_for_panel("output", 5000)
 	assert_true(running_output_ready, "submitting preserved input should reopen the output panel")
 	assert_equal(
-		panel_text(running_output_bufnr),
-		"Running...",
-		"output panel should show a running placeholder before completion"
+		vim.api.nvim_get_option_value("buftype", { buf = running_output_bufnr }),
+		"terminal",
+		"resubmitting should start a fresh run terminal"
 	)
 
 	cpp_tasks.return_to_editor()
@@ -206,7 +241,7 @@ local ok, err = xpcall(function()
 	assert_true(replaced_input_ready, "rebuilding while the previous program runs should still reopen input")
 	assert_equal(
 		vim.api.nvim_buf_get_lines(replaced_input_bufnr, 0, -1, false),
-		{ "10", "11" },
+		{ "2", "10 11" },
 		"rebuild after cancelling a running program should keep the last input"
 	)
 
@@ -214,20 +249,24 @@ local ok, err = xpcall(function()
 		local current_bufnr, current_winid = find_panel("input")
 		return current_bufnr == replaced_input_bufnr
 			and current_winid == replaced_input_winid
-			and panel_text(replaced_input_bufnr) == "10\n11"
+			and panel_text(replaced_input_bufnr) == "2\n10 11"
 	end, 50)
 	assert_true(stale_callback_ignored, "stale run callback should not replace the fresh input panel after source F5")
 
+	-- Interactive problem flow: submit with no pre-fed input, then answer the
+	-- waiting program by typing into the live terminal (via its job channel).
 	vim.api.nvim_set_current_win(replaced_input_winid)
 	vim.api.nvim_buf_set_lines(replaced_input_bufnr, 0, -1, false, { "" })
 	cpp_tasks.submit_input()
 	local empty_output_ready, empty_output_bufnr, empty_output_winid = wait_for_panel("output", 5000)
-	assert_true(empty_output_ready, "empty stdin should still open the output panel")
-	local empty_done = vim.wait(10000, function()
-		return panel_text(empty_output_bufnr):match("0") ~= nil
+	assert_true(empty_output_ready, "empty stdin should still open the run terminal")
+	local interactive_job = vim.b[empty_output_bufnr].terminal_job_id
+	assert_true(interactive_job ~= nil, "run terminal should expose its job channel")
+	vim.fn.chansend(interactive_job, "2\r20 1\r")
+	local interactive_done = vim.wait(10000, function()
+		return panel_text(empty_output_bufnr):match("\n42") ~= nil
 	end, 50)
-	assert_true(empty_done, "empty stdin should still reach EOF and produce output")
-	assert_equal(panel_text(empty_output_bufnr), "0", "empty stdin should be passed through as an empty string")
+	assert_true(interactive_done, "typing into the live terminal should reach the program's stdin")
 
 	vim.api.nvim_set_current_win(empty_output_winid)
 	cpp_tasks.close_panel()

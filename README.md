@@ -56,6 +56,10 @@ Open a `*.cpp` buffer and use the buffer-local keys below:
 - `<F5>` - save, build asynchronously, then open a bottom input panel for the compiled `.exe`
 - `<leader>it` - insert the contest template into a blank C++ buffer
 - `<leader>rx` - stop the running program if needed and close its run panel
+- `<leader>rp` - toggle the run panel between the bottom and the right side
+  (also `:CppPanelSide`; works from the panel too, and moves it live without
+  restarting the program; set `vim.g.cpp_panel_position = "right"` to make
+  right the startup default)
 
 Details that matter:
 
@@ -70,19 +74,24 @@ Details that matter:
 - Build artifacts go under `stdpath('cache')/cpp-build/`, not beside the source
   file.
 - Compile failures populate quickfix and open it automatically.
-- Successful runs reuse one bottom scratch area built from `nvim_create_buf(false, true)`.
+- Successful runs reuse one bottom panel area.
 - After a successful build, that panel opens as a normal editable input buffer.
-  Type or paste stdin directly, then press `<F5>` in the panel to submit all of
-  its text through `vim.system({...}, { stdin = input })`.
-- The input panel stays plain: no Terminal mode, no PTY, no EOF keystroke, no
-  clipboard remaps. Empty input is valid and submits as an empty string.
-- After submission, the same bottom area becomes a read-only output buffer that
-  shows stdout, adds a `[stderr]` section when needed, and appends `[exit N]`
-  for nonzero exits.
+  Type or paste stdin directly, then press `<F5>` in the panel to submit.
+- Submission runs the exe in a terminal in the same bottom area and pre-feeds
+  your input, but leaves stdin open. Batch problems behave as before: input is
+  auto-typed, output appears, and a nonzero exit raises a notification.
+  Interactive problems just work: keep typing in the terminal to answer the
+  program's queries. Submitting empty input starts the program with nothing
+  fed, ready for a fully live session.
+- Programs that read until EOF need an explicit end-of-input keystroke in the
+  terminal: `Ctrl-Z` then `Enter` on Windows (`Ctrl-D` on Unix). Contest
+  problems with explicit counts never need this.
 - While focused on the input panel, `<Esc>` returns to the launching source
   window, `<F5>` submits, and `<C-q>` closes the panel.
-- While focused on the output panel, `<F5>` returns to the preserved input for a
-  rerun, `<Esc>` returns to the source window, and `q` / `<C-q>` close the panel.
+- In the run terminal, typing goes to the program; `<Esc>` drops to normal
+  mode (press `<Esc>` again to return to the source window), `<F5>` stops the
+  program and reopens the preserved input for a rerun, and `<C-q>` (or `q` in
+  normal mode) closes the panel.
 - A previous still-running program is killed and awaited before rebuilding the
   same cached executable path, so repeated runs stay deterministic and do not
   leave stale callbacks or locked `.exe` files behind.
@@ -154,6 +163,7 @@ are applied buffer-locally and do not leak into C++ buffers.
 | `<F6>` | `cpp` buffer only | Build only |
 | `<leader>it` | `cpp` buffer only | Insert contest template into a blank file |
 | `<leader>rx` | `cpp` buffer only | Stop and close the C++ run panel |
+| `<leader>rp` | `cpp` buffer / run panel | Toggle panel between bottom and right |
 | `<leader>tp` | `typst` buffer only | Toggle Typst browser preview |
 | `<leader>tq` | `typst` buffer only | Stop Typst preview |
 | `<leader>te` | `typst` buffer only | Export PDF and open it |
@@ -164,11 +174,12 @@ are applied buffer-locally and do not leak into C++ buffers.
 | `<leader><space>` | global | Clear search highlight |
 | `<leader>q` | global | Quit all without saving |
 | `<C-BS>` | insert / command | Delete previous word |
-| `<Esc>` | C++ input/output panel | Return to the source editor |
-| `<F5>` | C++ input panel | Submit the full buffer as stdin |
+| `<Esc>` | C++ input panel | Return to the source editor |
+| `<F5>` | C++ input panel | Submit the buffer as pre-fed stdin |
 | `<C-q>` | C++ input panel | Close the run panel |
-| `<F5>` | C++ output panel | Reopen the preserved input for rerun |
-| `q` / `<C-q>` | C++ output panel | Close the run panel |
+| `<Esc>` | C++ run terminal | Leave live typing (again: back to editor) |
+| `<F5>` | C++ run terminal | Stop program, reopen preserved input |
+| `q` / `<C-q>` | C++ run terminal | Close the run panel |
 
 ## Validation and troubleshooting
 
@@ -211,9 +222,10 @@ Common issues:
 - **The C++ panel is still on the input buffer**: expected until you press
   `<F5>` inside that panel. The source-buffer `<F5>` only compiles and opens the
   editable stdin scratch.
-- **A program reads until EOF**: expected. The panel sends the entire buffer as a
-  string, so just type or paste the full test case and press `<F5>` once.
-- **You want to tweak the same input again**: from the output panel, press `<F5>`
+- **A program reads until EOF and never finishes**: stdin stays open so
+  interactive problems work. Type `Ctrl-Z` then `Enter` in the run terminal to
+  send EOF on Windows (`Ctrl-D` on Unix).
+- **You want to tweak the same input again**: from the run terminal, press `<F5>`
   to reopen the preserved stdin text, edit it normally, and submit again.
 - **Typst preview's first launch is slow**: expected. It uses the system
   Tinymist, but `typst-preview.nvim` still fetches its websocat helper on first
@@ -241,9 +253,10 @@ They assert that:
 - prose options are local to Markdown/Typst and do not leak into C++
 - the C++ compile argv keeps a source path with spaces as a single argv entry
 - the real C++ runner compiles from a path with spaces, opens the scratch input
-  panel, submits `10\n11` as stdin, observes `42` in the read-only output panel,
-  preserves input for rerun, allows empty stdin, and safely rebuilds the same
-  cached executable while cancelling a previous run on both Windows and Linux
+  panel, pre-feeds stdin into the run terminal, observes `42`, preserves input
+  for rerun, answers an interactive prompt by typing into the live terminal,
+  and safely rebuilds the same cached executable while cancelling a previous
+  run on both Windows and Linux
 - the real Typst export callback compiles a math note from a path with spaces
   and produces a non-empty PDF
 - repeated same-title note creation produces unique files instead of overwriting
