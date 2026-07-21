@@ -1,0 +1,11 @@
+# Neovide runtime logs
+neovide_r*.log
+
+# Vim/Neovim temporary files
+*.swp
+*.swo
+*~
+*.tmp
+*.bak
+*.orig
+*.rej

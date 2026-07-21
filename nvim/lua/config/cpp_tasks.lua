@@ -345,6 +345,68 @@ local function input_payload(lines)
 	return table.concat(kept, "\r") .. "\r"
 end
 
+local windows_exception_names = {
+	[0xC0000005] = "access violation",
+	[0xC000001D] = "illegal instruction",
+	[0xC0000094] = "integer division by zero",
+	[0xC00000FD] = "stack overflow",
+	[0xC0000135] = "required DLL not found",
+	[0xC0000409] = "stack buffer overrun or fast-fail",
+}
+
+local unix_exit_names = {
+	[134] = "aborted (SIGABRT)",
+	[136] = "floating-point exception (SIGFPE)",
+	[137] = "killed (SIGKILL)",
+	[139] = "segmentation fault (SIGSEGV)",
+	[143] = "terminated (SIGTERM)",
+}
+
+local function runtime_failure_message(code)
+	if vim.fn.has("win32") == 1 then
+		local unsigned_code = code < 0 and (code + 0x100000000) or code
+		local reason = windows_exception_names[unsigned_code]
+		if reason then
+			return string.format("Program crashed: %s (0x%08X).", reason, unsigned_code)
+		end
+	end
+
+	local reason = unix_exit_names[code]
+	if reason then
+		return string.format("Program crashed: %s, exit code %d.", reason, code)
+	end
+	return string.format("Program exited with code %d.", code)
+end
+
+local function append_runtime_failure(bufnr, winid, code)
+	if not is_valid_buf(bufnr) then
+		return
+	end
+
+	local message = runtime_failure_message(code)
+	local was_modifiable = vim.api.nvim_get_option_value("modifiable", { buf = bufnr })
+	local appended = pcall(function()
+		vim.api.nvim_set_option_value("modifiable", true, { buf = bufnr })
+		vim.api.nvim_buf_set_lines(bufnr, -1, -1, false, {
+			"",
+			"[runtime error]",
+			message,
+			"Press F5 to edit the input and rerun, or q to close.",
+		})
+		vim.api.nvim_set_option_value("modified", false, { buf = bufnr })
+	end)
+	pcall(vim.api.nvim_set_option_value, "modifiable", was_modifiable, { buf = bufnr })
+
+	if appended and is_valid_win(winid) and vim.api.nvim_win_get_buf(winid) == bufnr then
+		local line_count = vim.api.nvim_buf_line_count(bufnr)
+		pcall(vim.api.nvim_win_set_cursor, winid, { line_count, 0 })
+	end
+	if not appended then
+		message = message .. " The run panel could not be updated."
+	end
+	notify(message, vim.log.levels.WARN, "C++ run")
+end
+
 local function show_input_panel(source_path, output_path, editor_winid, editor_bufnr)
 	state.editor_winid = editor_winid
 	state.editor_bufnr = editor_bufnr
@@ -416,7 +478,7 @@ function M.submit_input()
 						state.run_job = nil
 					end
 					if code ~= 0 then
-						notify(string.format("Program exited with code %d.", code), vim.log.levels.WARN, "C++ run")
+						append_runtime_failure(bufnr, winid, code)
 					end
 				end)
 			end,

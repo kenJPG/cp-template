@@ -41,17 +41,17 @@ function Set-NeovideConfig {
     $escapedDesktop = $desktop.Replace('\', '\\').Replace('"', '\"')
     $setting = "chdir = `"$escapedDesktop`""
     $lines = if (Test-Path $configPath) { [System.IO.File]::ReadAllLines($configPath) } else { @() }
-    $found = $false
+    $foundChdir = $false
     $updated = foreach ($line in $lines) {
         if ($line -match '^\s*chdir\s*=') {
             $setting
-            $found = $true
+            $foundChdir = $true
         } else {
             $line
         }
     }
 
-    if (-not $found) {
+    if (-not $foundChdir) {
         $updated = @($setting) + @($updated)
     }
 

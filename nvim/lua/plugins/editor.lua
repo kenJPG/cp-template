@@ -1,8 +1,7 @@
 -- ============================================================================
 -- editor.lua — editor-behaviour overrides
 -- ============================================================================
--- Keep editing direct and predictable: no animated scrolling, indent guides,
--- or automatic pair insertion.
+-- Keep editing direct and predictable: no animated scrolling or indent guides.
 -- ============================================================================
 
 return {
@@ -16,6 +15,22 @@ return {
 		},
 	},
 
-	-- LazyVim normally enables this; disabling it restores plain Vim insertion.
-	{ "nvim-mini/mini.pairs", enabled = false },
+	-- Smart auto-pairing for (), {}, [], "", '', ``:
+	--   * typing an opener inserts the closer with the cursor inside
+	--   * typing a closer that is already next just moves over it
+	--   * <BS> between a pair deletes both; <CR> between {} opens an indented block
+	--   * skip_next: no pairing right before a word character (e.g. wrapping)
+	--   * skip_ts: no quote-pairing inside strings (apostrophes in text/comments)
+	--   * skip_unbalanced: typing ) with more ) than ( inserts nothing extra
+	{
+		"nvim-mini/mini.pairs",
+		enabled = true,
+		opts = {
+			modes = { insert = true, command = true, terminal = false },
+			skip_next = [=[[%w%%%'%[%"%.%`%$]]=],
+			skip_ts = { "string" },
+			skip_unbalanced = true,
+			markdown = true,
+		},
+	},
 }

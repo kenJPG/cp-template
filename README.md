@@ -36,7 +36,9 @@ clangd, WinLibs `g++`, tree-sitter CLI, StyLua, ripgrep, and fd via
   existing config first
 - return to the normal user before running plugin code
 - configure Neovide to open in your Windows Desktop directory with direct,
-  non-animated cursor and scrolling behavior
+  non-animated cursor and scrolling behavior; the editor selects the
+  no-ligature `JetBrainsMonoNL NF` family so operators such as `!=` and `<=`
+  remain literal characters
 - restore/install the lockfile's pinned plugins, synchronously install core
   parsers that build reliably with WinLibs, inspect plugin task errors, and
   verify a clean second start
@@ -79,7 +81,9 @@ Details that matter:
   Type or paste stdin directly, then press `<F5>` in the panel to submit.
 - Submission runs the exe in a terminal in the same bottom area and pre-feeds
   your input, but leaves stdin open. Batch problems behave as before: input is
-  auto-typed, output appears, and a nonzero exit raises a notification.
+  auto-typed and output appears. A nonzero exit or crash leaves a permanent
+  `[runtime error]` footer with the exit reason in the panel and also raises a
+  warning notification; stderr remains visible immediately above the footer.
   Interactive problems just work: keep typing in the terminal to answer the
   program's queries. Submitting empty input starts the program with nothing
   fed, ready for a fully live session.
@@ -99,8 +103,11 @@ Details that matter:
   LazyVim's inherited Snacks smooth scrolling are disabled.
 - The editor uses Neovim's built-in `vim` colorscheme on a light background,
   matching the classic native gVim syntax colors without a theme plugin.
-- Indentation guides and automatic pairs are disabled for plain, predictable
-  Vim editing. Neovide adds only 6 px top and 4 px side padding.
+- Indentation guides are disabled. Smart auto-pairs (mini.pairs) are on:
+  openers insert their closer with the cursor inside, typing an existing
+  closer skips over it, backspace deletes a whole empty pair, Enter between
+  `{}` opens an indented block, and quotes never pair inside strings or
+  before a word character. Neovide adds only 6 px top and 4 px side padding.
 
 Buffer-local commands for the same flow:
 
@@ -227,6 +234,8 @@ Common issues:
   send EOF on Windows (`Ctrl-D` on Unix).
 - **You want to tweak the same input again**: from the run terminal, press `<F5>`
   to reopen the preserved stdin text, edit it normally, and submit again.
+- **`!=` or `<=` appears as one combined symbol**: restart Neovide and check
+  `:set guifont?`; it should report `JetBrainsMonoNL NF:h11`.
 - **Typst preview's first launch is slow**: expected. It uses the system
   Tinymist, but `typst-preview.nvim` still fetches its websocat helper on first
   use and needs `curl` available.

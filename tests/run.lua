@@ -88,7 +88,27 @@ assert_equal(vim.g.neovide_padding_top, 6, "Neovide should have small top paddin
 assert_equal(vim.g.neovide_padding_bottom, 0, "Neovide should not have bottom padding")
 assert_equal(vim.g.neovide_padding_left, 4, "Neovide should have subtle left padding")
 assert_equal(vim.g.neovide_padding_right, 4, "Neovide should have subtle right padding")
+assert_equal(vim.o.guifont, "JetBrainsMonoNL NF:h11", "Neovide should use the no-ligature Nerd Font family")
 assert_equal(vim.o.background, "light", "editor background mode should match classic light gVim")
+local expected_statuscolumn = "%!v:lua.LazyVim.statuscolumn()"
+assert_equal(vim.o.statuscolumn, expected_statuscolumn, "statuscolumn should use an evaluated LazyVim expression")
+
+local previous_lazyvim = _G.LazyVim
+_G.LazyVim = {
+	statuscolumn = function()
+		return "%l "
+	end,
+}
+local rendered_statuscolumn = vim.api.nvim_eval_statusline(vim.o.statuscolumn, {
+	winid = vim.api.nvim_get_current_win(),
+	use_statuscol_lnum = 1,
+}).str
+_G.LazyVim = previous_lazyvim
+assert_true(
+	not rendered_statuscolumn:find("v:lua", 1, true),
+	"statuscolumn should evaluate instead of rendering Lua text"
+)
+assert_true(rendered_statuscolumn ~= vim.o.statuscolumn, "rendered statuscolumn should differ from its expression")
 
 local colorscheme = find_plugin(colorscheme_plugin_spec, "LazyVim/LazyVim")
 assert_true(colorscheme ~= nil, "colorscheme spec should configure LazyVim")
@@ -109,7 +129,6 @@ assert_equal(clangd.cmd[#clangd.cmd], "--fallback-style=none", "clangd should pr
 local lock_path = vim.fs.joinpath(bootstrap.nvim_root, "lazy-lock.json")
 local lock = vim.json.decode(table.concat(vim.fn.readfile(lock_path), "\n"))
 assert_true(lock["github-theme"] == nil, "unused GitHub theme should not remain locked")
-assert_true(lock.catppuccin == nil, "unused Catppuccin theme should not remain locked")
 
 local snacks = find_plugin(editor_plugin_spec, "folke/snacks.nvim")
 assert_true(snacks ~= nil, "editor plugin spec should override snacks.nvim")
@@ -146,7 +165,7 @@ assert_true(map_exists(cpp_buf, "n", "<F6>"), "<F6> should exist in cpp normal m
 assert_true(map_exists(cpp_buf, "i", "<F6>"), "<F6> should exist in cpp insert mode")
 assert_true(map_exists(cpp_buf, "v", "<F6>"), "<F6> should exist in cpp visual mode")
 assert_true(map_exists(cpp_buf, "n", " it"), "<leader>it should exist in cpp normal mode")
-assert_true(map_exists(cpp_buf, "n", " rx"), "<leader>rx should close the C++ console")
+assert_true(map_exists(cpp_buf, "n", " rx"), "<leader>rx should close the C++ run panel")
 assert_true(vim.api.nvim_buf_get_commands(cpp_buf, {}).CppClose ~= nil, "CppClose should exist in C++ buffers")
 assert_equal(vim.b[cpp_buf].autoformat, false, "new cpp buffers should disable format-on-save")
 

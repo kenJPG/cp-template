@@ -185,7 +185,10 @@ local ok, err = xpcall(function()
 	assert_true(has_map(output_bufnr, "n", "<C-Q>", "Close C++ run panel"), "output Ctrl-Q close mapping should exist")
 	assert_true(has_map(output_bufnr, "t", "<Esc>"), "terminal Escape mapping should exist")
 	assert_true(has_map(output_bufnr, "t", "<F5>", "Edit C++ input again"), "terminal F5 rerun mapping should exist")
-	assert_true(has_map(output_bufnr, "t", "<C-Q>", "Close C++ run panel"), "terminal Ctrl-Q close mapping should exist")
+	assert_true(
+		has_map(output_bufnr, "t", "<C-Q>", "Close C++ run panel"),
+		"terminal Ctrl-Q close mapping should exist"
+	)
 
 	local saw_answer = vim.wait(10000, function()
 		return panel_text(output_bufnr):match("42") ~= nil
@@ -276,6 +279,42 @@ local ok, err = xpcall(function()
 		vim.api.nvim_get_current_win() == source_winid and vim.api.nvim_get_current_buf() == source_bufnr,
 		"closing the focused output panel should restore the source editor"
 	)
+
+	-- Runtime failures must remain visible in the panel instead of relying on a
+	-- transient notification. stderr should stay directly above the footer.
+	vim.api.nvim_buf_set_lines(source_bufnr, 0, -1, false, {
+		"#include <iostream>",
+		"int main() {",
+		'  std::cerr << "runtime boom\\n";',
+		"  return 7;",
+		"}",
+	})
+	cpp_tasks.build_and_run()
+	local failure_input_ready, _, failure_input_winid = wait_for_panel("input", 20000)
+	assert_true(failure_input_ready, "runtime failure fixture did not compile")
+	vim.api.nvim_set_current_win(failure_input_winid)
+	cpp_tasks.submit_input()
+	local failure_output_ready, failure_output_bufnr, failure_output_winid = wait_for_panel("output", 5000)
+	assert_true(failure_output_ready, "runtime failure did not open the output terminal")
+	local failure_visible = vim.wait(10000, function()
+		local text = panel_text(failure_output_bufnr)
+		return text:find("runtime boom", 1, true)
+			and text:find("[runtime error]", 1, true)
+			and text:find("Program exited with code 7.", 1, true)
+	end, 50)
+	assert_true(failure_visible, "stderr and nonzero exit status should remain visible in the run panel")
+	assert_equal(
+		vim.api.nvim_get_option_value("modifiable", { buf = failure_output_bufnr }),
+		false,
+		"runtime failure footer should leave the terminal read-only"
+	)
+	assert_equal(
+		vim.api.nvim_win_get_cursor(failure_output_winid)[1],
+		vim.api.nvim_buf_line_count(failure_output_bufnr),
+		"runtime failure panel should scroll to the diagnostic footer"
+	)
+	vim.api.nvim_set_current_win(failure_output_winid)
+	cpp_tasks.close_panel()
 
 	cpp_tasks.build_and_run()
 	cpp_tasks.close_panel()

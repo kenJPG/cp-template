@@ -33,6 +33,10 @@ opt.hlsearch = true -- highlight all matches
 opt.showmatch = true -- briefly jump to the matching bracket
 opt.matchtime = 1 -- ...for 1/10s
 
+-- Keep LazyVim's status column as an evaluated expression. Without the leading
+-- %!, Neovim renders the Lua reference literally at the start of every line.
+opt.statuscolumn = [[%!v:lua.LazyVim.statuscolumn()]]
+
 -- Use the system clipboard for all yanks/pastes. The official Windows Neovim
 -- build bundles win32yank.exe, so this "just works" out of the box — no "+
 -- prefix needed, and no extra setup required.
@@ -41,12 +45,15 @@ opt.clipboard = "unnamedplus"
 -- ----------------------------------------------------------------------------
 -- GUI font (Neovide). LazyVim's UI is full of Nerd Font icons; without a Nerd
 -- Font they render as ◆?-diamonds. install.ps1 installs JetBrainsMono Nerd
--- Font via winget, whose registered family name is "JetBrainsMono NF" (NOT
--- "JetBrainsMono Nerd Font" — the winget packaging uses the short name).
+-- Font via winget, including the "JetBrainsMonoNL NF" no-ligature family used
+-- here (the NL variant retains all Nerd Font icons).
 -- Harmless under terminal nvim, where the terminal's own font applies instead
 -- (use a Nerd Font there too — Windows Terminal ships "Cascadia Code NF").
+--
+-- Use the dedicated no-ligature family so operators such as != and <= always
+-- remain literal characters.
 -- ----------------------------------------------------------------------------
-vim.o.guifont = "JetBrainsMono NF:h11"
+vim.o.guifont = "JetBrainsMonoNL NF:h11"
 
 -- Neovide's default cursor interpolates between positions for 150 ms. With a
 -- blue cursor highlight that looks like a blue smear, so keep movement direct.

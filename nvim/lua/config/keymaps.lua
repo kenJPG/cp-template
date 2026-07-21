@@ -18,6 +18,11 @@ map("n", "<leader><space>", ":nohlsearch<CR>", { silent = true, desc = "Clear se
 -- Quit everything without saving.
 map("n", "<leader>q", ":qa!<CR>", { silent = true, desc = "Quit all (no save)" })
 
+-- Reopen the start screen (Snacks dashboard).
+map("n", "<leader>;", function()
+	Snacks.dashboard()
+end, { silent = true, desc = "Open dashboard" })
+
 -- Ctrl-Backspace deletes the previous word, in insert and command-line mode.
 -- (Some terminals send <C-h> for Ctrl-Backspace instead; Windows Terminal and
 -- PowerShell send <C-BS>, which is what we map here.)
