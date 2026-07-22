@@ -90,25 +90,11 @@ assert_equal(vim.g.neovide_padding_left, 4, "Neovide should have subtle left pad
 assert_equal(vim.g.neovide_padding_right, 4, "Neovide should have subtle right padding")
 assert_equal(vim.o.guifont, "JetBrainsMonoNL NF:h11", "Neovide should use the no-ligature Nerd Font family")
 assert_equal(vim.o.background, "light", "editor background mode should match classic light gVim")
-local expected_statuscolumn = "%!v:lua.LazyVim.statuscolumn()"
-assert_equal(vim.o.statuscolumn, expected_statuscolumn, "statuscolumn should use an evaluated LazyVim expression")
-
-local previous_lazyvim = _G.LazyVim
-_G.LazyVim = {
-	statuscolumn = function()
-		return "%l "
-	end,
-}
-local rendered_statuscolumn = vim.api.nvim_eval_statusline(vim.o.statuscolumn, {
-	winid = vim.api.nvim_get_current_win(),
-	use_statuscol_lnum = 1,
-}).str
-_G.LazyVim = previous_lazyvim
-assert_true(
-	not rendered_statuscolumn:find("v:lua", 1, true),
-	"statuscolumn should evaluate instead of rendering Lua text"
-)
-assert_true(rendered_statuscolumn ~= vim.o.statuscolumn, "rendered statuscolumn should differ from its expression")
+assert_equal(vim.wo.list, false, "tabs and trailing spaces should not render as visible markers")
+assert_equal(vim.wo.statuscolumn, "", "code windows should use Neovim's native fixed-width gutter")
+assert_equal(vim.wo.signcolumn, "yes:1", "code windows should reserve exactly one sign column")
+assert_equal(vim.wo.foldcolumn, "0", "code windows should not reserve a fold column")
+assert_equal(vim.wo.numberwidth, 4, "code windows should use a stable four-cell number column")
 
 local colorscheme = find_plugin(colorscheme_plugin_spec, "LazyVim/LazyVim")
 assert_true(colorscheme ~= nil, "colorscheme spec should configure LazyVim")
@@ -116,6 +102,8 @@ assert_equal(colorscheme.opts.colorscheme, "vim", "classic built-in Vim colors s
 
 local lspconfig = find_plugin(cpp_plugin_spec, "neovim/nvim-lspconfig")
 assert_true(lspconfig ~= nil, "C++ plugin spec should configure nvim-lspconfig")
+assert_true(vim.tbl_contains(lspconfig.opts.inlay_hints.exclude, "c"), "C inlay hints should be disabled")
+assert_true(vim.tbl_contains(lspconfig.opts.inlay_hints.exclude, "cpp"), "C++ inlay hints should be disabled")
 local clangd = lspconfig.opts.servers.clangd
 assert_equal(clangd.cmd[1], "clangd", "clangd command should use the system executable")
 assert_equal(clangd.init_options.fallbackFlags[1], "-std=gnu++20", "clangd fallback should match C++ build mode")

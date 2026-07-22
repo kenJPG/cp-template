@@ -101,8 +101,12 @@ Details that matter:
   leave stale callbacks or locked `.exe` files behind.
 - Large motions such as `gg` and `G` are immediate; both Neovide animation and
   LazyVim's inherited Snacks smooth scrolling are disabled.
+- Code windows use Neovim's fixed native number/sign gutter rather than a
+  dynamically sized status column, preventing a stale oversized left margin.
 - The editor uses Neovim's built-in `vim` colorscheme on a light background,
   matching the classic native gVim syntax colors without a theme plugin.
+- C/C++ inferred-type inlay hints are disabled, and tabs/trailing spaces render
+  as ordinary blank whitespace instead of inline type labels or `>`/`-` marks.
 - Indentation guides are disabled. Smart auto-pairs (mini.pairs) are on:
   openers insert their closer with the cursor inside, typing an existing
   closer skips over it, backspace deletes a whole empty pair, Enter between

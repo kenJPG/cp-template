@@ -16,6 +16,13 @@ opt.background = "light" -- classic gVim uses its light syntax palette
 opt.number = true -- show line numbers
 opt.belloff = "all" -- no bells, ever (the terminal beep is maddening)
 
+-- Use Neovim's fixed native gutter. A dynamic custom statuscolumn can grow for
+-- one unusually wide line and remain cached at that width for the whole window.
+opt.statuscolumn = ""
+opt.signcolumn = "yes:1"
+opt.foldcolumn = "0"
+opt.numberwidth = 4
+
 -- Indentation: 4-space soft tabs, the competitive-programming default.
 opt.tabstop = 4
 opt.shiftwidth = 4
@@ -26,16 +33,13 @@ opt.softtabstop = 4
 opt.backspace = "indent,eol,start"
 
 opt.autoindent = true
+opt.list = false -- keep tabs/trailing spaces visually blank instead of showing > or - markers
 
 opt.undofile = true -- persistent undo across sessions
 opt.incsearch = true -- show matches as you type the search
 opt.hlsearch = true -- highlight all matches
 opt.showmatch = true -- briefly jump to the matching bracket
 opt.matchtime = 1 -- ...for 1/10s
-
--- Keep LazyVim's status column as an evaluated expression. Without the leading
--- %!, Neovim renders the Lua reference literally at the start of every line.
-opt.statuscolumn = [[%!v:lua.LazyVim.statuscolumn()]]
 
 -- Use the system clipboard for all yanks/pastes. The official Windows Neovim
 -- build bundles win32yank.exe, so this "just works" out of the box — no "+

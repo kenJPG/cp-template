@@ -21,6 +21,9 @@ return {
 	{
 		"neovim/nvim-lspconfig",
 		opts = {
+			inlay_hints = {
+				exclude = { "vue", "c", "cpp", "objc", "objcpp", "cuda" },
+			},
 			servers = {
 				clangd = {
 					mason = false,
