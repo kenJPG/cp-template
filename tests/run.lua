@@ -8,12 +8,24 @@ vim.cmd("file already-open.cpp")
 vim.cmd("setfiletype cpp")
 local preloaded_cpp_buf = vim.api.nvim_get_current_buf()
 
+local preloaded_java_buf = vim.api.nvim_create_buf(true, false)
+vim.api.nvim_buf_set_name(preloaded_java_buf, "already-open.java")
+vim.api.nvim_set_option_value("filetype", "java", { buf = preloaded_java_buf })
+local preloaded_python_buf = vim.api.nvim_create_buf(true, false)
+vim.api.nvim_buf_set_name(preloaded_python_buf, "already-open.py")
+vim.api.nvim_set_option_value("filetype", "python", { buf = preloaded_python_buf })
+
 bootstrap.load_autocmds()
 
 local cpp_tasks = require("config.cpp_tasks")
+local language_run = require("config.language_run")
 local colorscheme_plugin_spec = dofile(vim.fs.joinpath(bootstrap.nvim_root, "lua", "plugins", "colorscheme.lua"))
 local cpp_plugin_spec = dofile(vim.fs.joinpath(bootstrap.nvim_root, "lua", "plugins", "cpp.lua"))
 local editor_plugin_spec = dofile(vim.fs.joinpath(bootstrap.nvim_root, "lua", "plugins", "editor.lua"))
+local java_plugin_spec = dofile(vim.fs.joinpath(bootstrap.nvim_root, "lua", "plugins", "java.lua"))
+local language_tools = require("config.language_tools")
+local mason_plugin_spec = dofile(vim.fs.joinpath(bootstrap.nvim_root, "lua", "plugins", "mason.lua"))
+local python_plugin_spec = dofile(vim.fs.joinpath(bootstrap.nvim_root, "lua", "plugins", "python.lua"))
 local typst_plugin_spec = dofile(vim.fs.joinpath(bootstrap.nvim_root, "lua", "plugins", "typst.lua"))
 
 local function fail(message)
@@ -74,6 +86,14 @@ local function find_plugin(spec, name)
 	end
 end
 
+local function find_import(spec, name)
+	for _, item in ipairs(spec) do
+		if item.import == name then
+			return item
+		end
+	end
+end
+
 assert_true(not global_map_exists("n", "<F5>"), "<F5> should not be a global normal-mode map")
 assert_true(not global_map_exists("n", "<F6>"), "<F6> should not be a global normal-mode map")
 assert_equal(vim.g.neovide_cursor_animation_length, 0, "Neovide cursor animation should be disabled")
@@ -114,6 +134,57 @@ if gxx ~= "" then
 end
 assert_equal(clangd.cmd[#clangd.cmd], "--fallback-style=none", "clangd should preserve standalone contest formatting")
 
+assert_true(find_import(java_plugin_spec, "lazyvim.plugins.extras.lang.java") ~= nil, "Java extra should be enabled")
+local jdtls = find_plugin(java_plugin_spec, "mfussenegger/nvim-jdtls")
+assert_true(jdtls ~= nil, "Java support should configure nvim-jdtls")
+local java_lsp = find_plugin(java_plugin_spec, "neovim/nvim-lspconfig")
+assert_equal(java_lsp.opts.servers.jdtls.mason, false, "JDTLS should use the pinned bootstrap installer")
+local jdtls_opts = {}
+jdtls.opts(nil, jdtls_opts)
+assert_equal(jdtls_opts.dap, false, "Java debugging should stay disabled until explicitly needed")
+assert_equal(jdtls_opts.test, false, "Java test adapters should stay disabled until explicitly needed")
+assert_true(jdtls_opts.cmd[1]:match("mason[/\\]bin[/\\]jdtls") ~= nil, "JDTLS should use the pinned Mason command")
+assert_equal(
+	jdtls_opts.settings.java.inlayHints.parameterNames.enabled,
+	"none",
+	"Java parameter inlay hints should remain hidden"
+)
+
+assert_true(
+	find_import(python_plugin_spec, "lazyvim.plugins.extras.lang.python") ~= nil,
+	"Python extra should be enabled"
+)
+local python_lsp = find_plugin(python_plugin_spec, "neovim/nvim-lspconfig")
+assert_true(python_lsp ~= nil, "Python support should configure nvim-lspconfig")
+assert_equal(
+	python_lsp.opts.servers.basedpyright.mason,
+	false,
+	"BasedPyright should use the pinned bootstrap installer"
+)
+assert_equal(python_lsp.opts.servers.ruff.mason, false, "Ruff should use the pinned bootstrap installer")
+assert_equal(
+	python_lsp.opts.servers.basedpyright.settings.basedpyright.analysis.typeCheckingMode,
+	"standard",
+	"BasedPyright should use useful, non-strict type checking"
+)
+local python_conform = find_plugin(python_plugin_spec, "stevearc/conform.nvim")
+assert_equal(python_conform.opts.formatters_by_ft.python[1], "ruff_format", "Ruff should format Python")
+
+local mason = find_plugin(mason_plugin_spec, "mason-org/mason.nvim")
+local mason_opts = {}
+mason.opts(nil, mason_opts)
+assert_equal(#mason_opts.ensure_installed, 0, "Mason's asynchronous unpinned installer should stay disabled")
+local mason_lspconfig = find_plugin(mason_plugin_spec, "mason-org/mason-lspconfig.nvim")
+local mason_lspconfig_opts = {}
+mason_lspconfig.opts(nil, mason_lspconfig_opts)
+assert_equal(#mason_lspconfig_opts.ensure_installed, 0, "mason-lspconfig's unpinned installer should stay disabled")
+assert_equal(language_tools[1].name, "jdtls", "Pinned tools should include JDTLS")
+assert_equal(language_tools[1].version, "v1.60.0", "JDTLS should have an exact version")
+assert_equal(language_tools[2].name, "basedpyright", "Pinned tools should include BasedPyright")
+assert_equal(language_tools[2].version, "1.39.9", "BasedPyright should have an exact version")
+assert_equal(language_tools[3].name, "ruff", "Pinned tools should include Ruff")
+assert_equal(language_tools[3].version, "0.15.22", "Ruff should have an exact version")
+
 local lock_path = vim.fs.joinpath(bootstrap.nvim_root, "lazy-lock.json")
 local lock = vim.json.decode(table.concat(vim.fn.readfile(lock_path), "\n"))
 assert_true(lock["github-theme"] == nil, "unused GitHub theme should not remain locked")
@@ -133,6 +204,8 @@ assert_equal(
 
 assert_true(map_exists(preloaded_cpp_buf, "n", "<F5>"), "already-open cpp buffers should receive <F5>")
 assert_true(map_exists(preloaded_cpp_buf, "n", "<F6>"), "already-open cpp buffers should receive <F6>")
+assert_true(map_exists(preloaded_java_buf, "n", "<F5>"), "already-open Java buffers should receive <F5>")
+assert_true(map_exists(preloaded_python_buf, "n", "<F5>"), "already-open Python buffers should receive <F5>")
 assert_true(vim.api.nvim_get_option_value("cindent", { buf = preloaded_cpp_buf }), "cpp should enable cindent locally")
 assert_equal(vim.b[preloaded_cpp_buf].autoformat, false, "cpp should preserve contest formatting on save")
 assert_equal(
@@ -157,6 +230,28 @@ assert_true(map_exists(cpp_buf, "n", " rx"), "<leader>rx should close the C++ ru
 assert_true(vim.api.nvim_buf_get_commands(cpp_buf, {}).CppClose ~= nil, "CppClose should exist in C++ buffers")
 assert_equal(vim.b[cpp_buf].autoformat, false, "new cpp buffers should disable format-on-save")
 
+vim.cmd("enew")
+vim.cmd("file Main.java")
+vim.cmd("setfiletype java")
+local java_buf = vim.api.nvim_get_current_buf()
+assert_true(map_exists(java_buf, "n", "<F5>"), "<F5> should exist in Java normal mode")
+assert_true(map_exists(java_buf, "i", "<F5>"), "<F5> should exist in Java insert mode")
+assert_true(map_exists(java_buf, "v", "<F5>"), "<F5> should exist in Java visual mode")
+assert_true(vim.api.nvim_buf_get_commands(java_buf, {}).LanguageRun ~= nil, "LanguageRun should exist in Java buffers")
+
+vim.cmd("enew")
+vim.cmd("file main.py")
+vim.cmd("setfiletype python")
+local python_buf = vim.api.nvim_get_current_buf()
+assert_true(map_exists(python_buf, "n", "<F5>"), "<F5> should exist in Python normal mode")
+assert_true(map_exists(python_buf, "i", "<F5>"), "<F5> should exist in Python insert mode")
+assert_true(map_exists(python_buf, "v", "<F5>"), "<F5> should exist in Python visual mode")
+assert_true(
+	vim.api.nvim_buf_get_commands(python_buf, {}).LanguageRun ~= nil,
+	"LanguageRun should exist in Python buffers"
+)
+
+vim.api.nvim_set_current_buf(cpp_buf)
 vim.cmd("CppTemplate")
 local template_cursor = vim.api.nvim_win_get_cursor(0)
 assert_equal(template_cursor[1], 35, "C++ template cursor should land on the solve body line")
@@ -268,5 +363,72 @@ assert_equal(argv[6], source_with_spaces, "source path with spaces must stay a s
 assert_equal(argv[7], "-o", "argv should include -o before the output path")
 assert_true(vim.startswith(argv[8], expected_output_dir), "output path should live under stdpath('cache')/cpp-build")
 assert_true(argv[8]:match("%.exe$") ~= nil, "output path should end in .exe")
+
+local runner_root = vim.fs.joinpath(vim.fn.stdpath("cache"), "language runner test")
+local fake_python = vim.fs.joinpath(runner_root, "selected venv", "python.exe")
+vim.fn.mkdir(vim.fs.dirname(fake_python), "p")
+vim.fn.writefile({ "#!/bin/sh", "exit 0" }, fake_python)
+pcall(vim.uv.fs_chmod, fake_python, 493)
+local previous_selector = package.loaded["venv-selector"]
+package.loaded["venv-selector"] = {
+	python = function()
+		return vim.fn.fnamemodify(fake_python, ":.")
+	end,
+}
+local python_source = vim.fs.joinpath(runner_root, "source dir", "main file.py")
+vim.api.nvim_buf_set_name(python_buf, python_source)
+local python_argv = assert(language_run.command_for(python_buf))
+assert_equal(python_argv[1], fake_python, "Python runs should honor the selected virtual environment")
+assert_equal(python_argv[2], python_source, "Python source paths with spaces should stay one argv entry")
+
+local local_python = vim.fs.joinpath(vim.fs.dirname(python_source), "python.exe")
+vim.fn.mkdir(vim.fs.dirname(local_python), "p")
+vim.fn.writefile({ "#!/bin/sh", "exit 0" }, local_python)
+pcall(vim.uv.fs_chmod, local_python, 493)
+package.loaded["venv-selector"] = {
+	python = function()
+		return nil
+	end,
+}
+local fallback_python_argv = assert(language_run.command_for(python_buf))
+assert_true(fallback_python_argv[1] ~= local_python, "Python PATH fallback must not select a project-local executable")
+assert_true(
+	fallback_python_argv[1]:match("^/") ~= nil or fallback_python_argv[1]:match("^%a:[/\\]") ~= nil,
+	"Python PATH fallback should resolve to an absolute path"
+)
+package.loaded["venv-selector"] = previous_selector
+
+local windows_runtime = require("config.windows_runtime")
+local previous_temurin_home = windows_runtime.temurin_home
+local fake_jdk = vim.fs.joinpath(runner_root, "jdk 17")
+local fake_java = vim.fs.joinpath(fake_jdk, "bin", "java.exe")
+vim.fn.mkdir(vim.fs.dirname(fake_java), "p")
+vim.fn.writefile({ "#!/bin/sh", "exit 0" }, fake_java)
+pcall(vim.uv.fs_chmod, fake_java, 493)
+windows_runtime.temurin_home = function()
+	return fake_jdk
+end
+local java_source = vim.fs.joinpath(runner_root, "source dir", "Main File.java")
+vim.api.nvim_buf_set_name(java_buf, java_source)
+local java_argv = assert(language_run.command_for(java_buf))
+assert_equal(java_argv[1], fake_java, "Java runs should use the configured Java 17 runtime")
+assert_equal(java_argv[2], "--source", "Java runs should use source-file mode")
+assert_equal(java_argv[3], "17", "Java source-file mode should target Java 17")
+assert_equal(java_argv[4], java_source, "Java source paths with spaces should stay one argv entry")
+windows_runtime.temurin_home = previous_temurin_home
+
+local local_java = vim.fs.joinpath(vim.fs.dirname(java_source), "java.exe")
+vim.fn.mkdir(vim.fs.dirname(local_java), "p")
+vim.fn.writefile({ "#!/bin/sh", "exit 0" }, local_java)
+pcall(vim.uv.fs_chmod, local_java, 493)
+local fallback_java_argv = language_run.command_for(java_buf)
+if fallback_java_argv then
+	assert_true(fallback_java_argv[1] ~= local_java, "Java PATH fallback must not select a project-local executable")
+	assert_true(
+		fallback_java_argv[1]:match("^/") ~= nil or fallback_java_argv[1]:match("^%a:[/\\]") ~= nil,
+		"Java PATH fallback should resolve to an absolute path"
+	)
+end
+vim.fn.delete(runner_root, "rf")
 
 print("tests/run.lua: ok")

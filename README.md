@@ -1,13 +1,14 @@
 # Neovim technical IDE - native Windows dotfiles
 
-This repo is a Windows-native Neovim setup for three daily workflows:
+This repo is a Windows-native Neovim setup for five daily workflows:
 
 - C++ competitive programming with a reliable `g++` build/run loop
 - Typst writing with Tinymist LSP, browser preview, and manual PDF export
 - Lightweight class notes in Typst or Markdown without a PKM framework
+- Java 17 projects with JDTLS completion, diagnostics, navigation, and refactoring
+- Python projects with BasedPyright, Ruff, and virtual-environment selection
 
-Everything runs on Windows directly: Neovim, Neovide, GCC, clangd, Typst, and
-Tinymist. No WSL or Linux VM is required.
+Everything runs on Windows directly. No WSL or Linux VM is required.
 
 ## Install
 
@@ -29,12 +30,14 @@ powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1
 Both phases are idempotent. Together they will:
 
 - install Git, Neovim, Neovide, JetBrainsMono Nerd Font, Typst, Tinymist,
-clangd, WinLibs `g++`, tree-sitter CLI, StyLua, ripgrep, and fd via
+  clangd, WinLibs `g++`, Temurin JDK 17 and 21, Python 3.13, tree-sitter CLI,
+  StyLua, ripgrep, and fd via
   `winget`
 - refresh PATH in-process and fail clearly if required tools are still missing
 - symlink `nvim/` from this repo to `%LOCALAPPDATA%\nvim`, backing up any
   existing config first
 - return to the normal user before running plugin code
+- install version-pinned JDTLS, BasedPyright, and Ruff as editor-only Mason tools
 - configure Neovide to open in your Windows Desktop directory with direct,
   non-animated cursor and scrolling behavior; the editor selects the
   no-ligature `JetBrainsMonoNL NF` family so operators such as `!=` and `<=`
@@ -164,16 +167,43 @@ Markdown and Typst buffers also get conservative local prose settings for class
 notes: `wrap`, `linebreak`, `breakindent`, `spell`, and `spelllang=en_us`. They
 are applied buffer-locally and do not leak into C++ buffers.
 
+### 4) Java 17: project-aware editing
+
+- Open a Java file inside a Maven, Gradle, or Ant project. JDTLS discovers the
+  project root and keeps a separate workspace under Neovim's cache.
+- Java 17 is the project compiler/runtime target. JDTLS runs on Java 21 because
+  current JDTLS releases require it; the installer configures both roles.
+- Completion, diagnostics, rename, go-to-definition, import organization, and
+  extract-variable/constant/method refactors are available through normal LSP
+  and `<leader>c...` actions.
+- `<F5>` saves and runs the current source directly with Java 17 source-file
+  mode in a reusable terminal panel. This is ideal for standalone exercises;
+  Maven/Gradle applications should keep using their project-defined run task.
+- Debugging and Java test adapters are intentionally not installed yet. They add
+  several packages and expensive project scans; add them only when needed.
+
+### 5) Python: typed, formatted project editing
+
+- BasedPyright provides completion, navigation, and standard-level type checks.
+- Ruff provides diagnostics, code actions, and formatting without overlapping
+  Black/Flake8/isort processes.
+- Create a `.venv` in the project when possible. Use `<leader>cv` to choose a
+  different environment; the selection is cached by the Python extra.
+- `<F5>` saves and runs the current file, preferring the interpreter selected by
+  `<leader>cv`, then the project's `.venv`, then the installed system Python.
+
 ## Key reference
 
 `<leader>` is the spacebar.
 
 | Key | Scope | Action |
 | --- | --- | --- |
-| `<F5>` | `cpp` buffer only | Build, then open the C++ input panel |
+| `<F5>` | `cpp` buffer | Build, then open the C++ input panel |
+| `<F5>` | `java` buffer | Save and run the current source as Java 17 |
+| `<F5>` | `python` buffer | Save and run with the selected/project interpreter |
 | `<F6>` | `cpp` buffer only | Build only |
 | `<leader>it` | `cpp` buffer only | Insert contest template into a blank file |
-| `<leader>rx` | `cpp` buffer only | Stop and close the C++ run panel |
+| `<leader>rx` | `cpp`, `java`, or `python` buffer | Stop and close its run panel |
 | `<leader>rp` | `cpp` buffer / run panel | Toggle panel between bottom and right |
 | `<leader>tp` | `typst` buffer only | Toggle Typst browser preview |
 | `<leader>tq` | `typst` buffer only | Stop Typst preview |
@@ -191,6 +221,9 @@ are applied buffer-locally and do not leak into C++ buffers.
 | `<Esc>` | C++ run terminal | Leave live typing (again: back to editor) |
 | `<F5>` | C++ run terminal | Stop program, reopen preserved input |
 | `q` / `<C-q>` | C++ run terminal | Close the run panel |
+| `<F5>` | Java/Python run terminal | Stop and rerun the source file |
+| `<Esc>` | Java/Python run terminal (normal mode) | Return to the source editor |
+| `<C-q>` | Java/Python run terminal | Stop and close the run panel |
 
 ## Validation and troubleshooting
 
@@ -208,6 +241,9 @@ nvim --version
 neovide --version
 gcc --version
 g++ --version
+java --version
+javac --version
+python --version
 clangd --version
 typst --version
 tinymist --version
@@ -223,8 +259,8 @@ Common issues:
 - **Installer stops with a missing-tools list**: one or more `winget` installs
   did not land on PATH. Re-run `install.cmd` after
   fixing the reported package.
-- **`<F5>` or `<F6>` does nothing in a non-C++ buffer**: expected. Those maps are
-  buffer-local to `cpp` only.
+- **`<F5>` does nothing outside C++, Java, or Python**: expected. Run mappings
+  are buffer-local to those filetypes; `<F6>` remains C++-only.
 - **Compile errors disappear too quickly**: they should now be in quickfix. Use
   `:copen` if you closed the list.
 - **clangd says `bits/stdc++.h` or `cout` is missing**: rerun `bootstrap.ps1` to
@@ -257,6 +293,10 @@ nvim --headless -u NONE "+lua dofile('tests/run.lua')" +qa
 nvim --headless -u NONE "+lua dofile('tests/cpp_e2e.lua')" +qa
 nvim --headless -u NONE "+lua dofile('tests/typst_e2e.lua')" +qa
 nvim --headless -u NONE "+lua dofile('tests/notes_e2e.lua')" +qa
+nvim --headless -u NONE "+lua dofile('tests/java_e2e.lua')" +qa
+nvim --headless -u NONE "+lua dofile('tests/python_e2e.lua')" +qa
+nvim --headless -u NONE "+lua dofile('tests/language_run_e2e.lua')" +qa
+nvim --headless "+lua dofile('tests/language_lsp_e2e.lua')" +qa
 powershell -ExecutionPolicy Bypass -File .\tests\bootstrap_failure.ps1
 ```
 
@@ -274,7 +314,12 @@ They assert that:
   and produces a non-empty PDF
 - repeated same-title note creation produces unique files instead of overwriting
   an existing note
+- Java sources compile with `javac --release 17` and run successfully
+- Python sources run successfully from paths containing spaces
+- Java/Python `<F5>` mappings stay buffer-local and produce real terminal output
+- JDTLS, BasedPyright, and Ruff attach to minimal project fixtures
 - bootstrap Lua/module failures force a nonzero Neovim process exit
 
-The end-to-end tests print a skip message rather than failing when their required
-compiler is not available.
+The standalone compile/run tests print a skip message when their system runtime
+is unavailable. The live LSP test fails when its repo-managed Mason tools are
+missing, keeping bootstrap verification fail-closed.

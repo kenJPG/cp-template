@@ -28,6 +28,46 @@ function Restore-LockFile($path, $bytes) {
     [System.IO.File]::WriteAllBytes($path, $bytes)
 }
 
+function Get-TemurinJdkHome($major) {
+    $root = Join-Path $env:ProgramFiles "Eclipse Adoptium"
+    if (-not (Test-Path $root -PathType Container)) {
+        throw "Temurin JDK $major is missing. Re-run install.ps1 from an elevated PowerShell."
+    }
+    $jdkHome = Get-ChildItem $root -Directory -Filter "jdk-$major*" -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            $match = [regex]::Match($_.Name, '^jdk-(\d+(?:\.\d+){0,3})')
+            if ($match.Success) {
+                [pscustomobject]@{ Path = $_.FullName; Version = [version]$match.Groups[1].Value }
+            }
+        } |
+        Sort-Object Version -Descending |
+        Select-Object -First 1 -ExpandProperty Path
+    if (-not $jdkHome) {
+        throw "Temurin JDK $major is missing. Re-run install.ps1 from an elevated PowerShell."
+    }
+    return $jdkHome
+}
+
+function Get-PythonHome {
+    $root = Join-Path $env:LOCALAPPDATA "Programs\Python"
+    $pythonInstallHome = Get-ChildItem $root -Directory -Filter "Python3*" -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            $match = [regex]::Match($_.Name, '^Python(\d)(\d+)$')
+            if ($match.Success -and (Test-Path (Join-Path $_.FullName "python.exe") -PathType Leaf)) {
+                [pscustomobject]@{
+                    Path = $_.FullName
+                    Version = [version]("$($match.Groups[1].Value).$($match.Groups[2].Value)")
+                }
+            }
+        } |
+        Sort-Object Version -Descending |
+        Select-Object -First 1 -ExpandProperty Path
+    if (-not $pythonInstallHome) {
+        throw "Python 3 is missing. Re-run install.ps1 from an elevated PowerShell."
+    }
+    return $pythonInstallHome
+}
+
 function Set-NeovideConfig {
     $desktop = [System.Environment]::GetFolderPath("Desktop")
     if ([string]::IsNullOrWhiteSpace($desktop)) {
@@ -93,6 +133,8 @@ function Set-ClangdConfig {
 }
 
 Refresh-Path
+$pythonHome = Get-PythonHome
+$env:Path = "$pythonHome;$env:Path"
 
 $configEntryPoint = Join-Path $env:LOCALAPPDATA "nvim\init.lua"
 if (-not (Test-Path $configEntryPoint -PathType Leaf)) {
@@ -104,11 +146,22 @@ if (-not (Test-Path $bootstrapRunner -PathType Leaf)) {
     throw "Bootstrap runner not found: $bootstrapRunner"
 }
 
-foreach ($command in @("git.exe", "nvim.exe", "gcc.exe", "g++.exe", "tree-sitter.exe", "stylua.exe")) {
+foreach ($command in @("git.exe", "nvim.exe", "gcc.exe", "g++.exe", "java.exe", "javac.exe", "python.exe", "tree-sitter.exe", "stylua.exe")) {
     if (-not (Get-Command $command -ErrorAction SilentlyContinue)) {
         throw "Required bootstrap tool is not on PATH: $command"
     }
 }
+
+& (Join-Path $pythonHome "python.exe") --version *> $null
+if ($LASTEXITCODE -ne 0) {
+    throw "python.exe is the Windows Store alias, not a working Python runtime. Re-run install.ps1 from an elevated PowerShell."
+}
+
+$jdk17 = Get-TemurinJdkHome 17
+$jdk21 = Get-TemurinJdkHome 21
+$env:JAVA_HOME = $jdk21
+$env:Path = "$(Join-Path $jdk21 'bin');$env:Path"
+Write-Done "Java projects target $jdk17; JDTLS runs on $jdk21."
 
 # tree-sitter defaults to Visual C++ on Windows when no compiler is specified.
 # WinLibs is already installed, so make the parser build use that known toolchain.

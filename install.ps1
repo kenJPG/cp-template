@@ -24,6 +24,9 @@
 #   - Tinymist               (Typst LSP: completion, diagnostics, formatting)
 #   - clangd                 (C++ LSP, for competitive-programming autocomplete)
 #   - WinLibs (GCC/MinGW)   (a REAL g++, not clang -- see note below)
+#   - Temurin JDK 17         (Java project compiler/runtime target)
+#   - Temurin JDK 21         (runtime required by the current Java language server)
+#   - Python 3.13            (Python runtime; editor tooling is isolated by Mason)
 #   - tree-sitter CLI       (parser compiler used by nvim-treesitter)
 #   - StyLua                (formatter used for this Neovim config)
 #   - ripgrep, fd           (used by LazyVim's fuzzy pickers)
@@ -84,6 +87,38 @@ function Install-WingetPackage($id, $name) {
     Write-Done "$name installed."
 }
 
+function Get-TemurinJdkHome($major) {
+    $root = Join-Path $env:ProgramFiles "Eclipse Adoptium"
+    if (-not (Test-Path $root -PathType Container)) {
+        return $null
+    }
+    return Get-ChildItem $root -Directory -Filter "jdk-$major*" -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            $match = [regex]::Match($_.Name, '^jdk-(\d+(?:\.\d+){0,3})')
+            if ($match.Success) {
+                [pscustomobject]@{ Path = $_.FullName; Version = [version]$match.Groups[1].Value }
+            }
+        } |
+        Sort-Object Version -Descending |
+        Select-Object -First 1 -ExpandProperty Path
+}
+
+function Get-PythonHome {
+    $root = Join-Path $env:LOCALAPPDATA "Programs\Python"
+    return Get-ChildItem $root -Directory -Filter "Python3*" -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            $match = [regex]::Match($_.Name, '^Python(\d)(\d+)$')
+            if ($match.Success -and (Test-Path (Join-Path $_.FullName "python.exe") -PathType Leaf)) {
+                [pscustomobject]@{
+                    Path = $_.FullName
+                    Version = [version]("$($match.Groups[1].Value).$($match.Groups[2].Value)")
+                }
+            }
+        } |
+        Sort-Object Version -Descending |
+        Select-Object -First 1 -ExpandProperty Path
+}
+
 function Get-MissingTools {
     $checks = @(
         @{ Name = "git";      Command = "git.exe" },
@@ -92,6 +127,9 @@ function Get-MissingTools {
         @{ Name = "gcc";      Command = "gcc.exe" },
         @{ Name = "g++";      Command = "g++.exe" },
         @{ Name = "clangd";   Command = "clangd.exe" },
+        @{ Name = "java";     Command = "java.exe" },
+        @{ Name = "javac";    Command = "javac.exe" },
+        @{ Name = "python";   Command = "python.exe" },
         @{ Name = "typst";    Command = "typst.exe" },
         @{ Name = "tinymist"; Command = "tinymist.exe" },
         @{ Name = "tree-sitter"; Command = "tree-sitter.exe" },
@@ -106,6 +144,23 @@ function Get-MissingTools {
         if (-not (Get-Command $check.Command -ErrorAction SilentlyContinue)) {
             $missing.Add($check.Name)
         }
+    }
+
+    $pythonHome = Get-PythonHome
+    if ($pythonHome) {
+        & (Join-Path $pythonHome "python.exe") --version *> $null
+        if ($LASTEXITCODE -ne 0) {
+            $missing.Add("Python 3.13 runtime")
+        }
+    } else {
+        $missing.Add("Python 3.13 runtime")
+    }
+
+    if (-not (Get-TemurinJdkHome 17)) {
+        $missing.Add("Temurin JDK 17")
+    }
+    if (-not (Get-TemurinJdkHome 21)) {
+        $missing.Add("Temurin JDK 21")
     }
 
     return $missing
@@ -130,6 +185,9 @@ Install-WingetPackage "Typst.Typst"                        "Typst"
 Install-WingetPackage "Myriad-Dreamin.Tinymist"            "Tinymist (Typst LSP)"
 Install-WingetPackage "LLVM.clangd"                        "clangd (C++ LSP)"
 Install-WingetPackage "BrechtSanders.WinLibs.POSIX.UCRT"   "WinLibs (real GCC/g++)"
+Install-WingetPackage "EclipseAdoptium.Temurin.17.JDK"     "Temurin JDK 17 (Java project runtime)"
+Install-WingetPackage "EclipseAdoptium.Temurin.21.JDK"     "Temurin JDK 21 (Java language-server runtime)"
+Install-WingetPackage "Python.Python.3.13"                  "Python 3.13"
 Install-WingetPackage "tree-sitter.tree-sitter-cli"        "tree-sitter CLI"
 Install-WingetPackage "JohnnyMorganz.StyLua"               "StyLua"
 Install-WingetPackage "BurntSushi.ripgrep.MSVC"            "ripgrep"
