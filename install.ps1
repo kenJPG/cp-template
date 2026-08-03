@@ -24,8 +24,9 @@
 #   - Tinymist               (Typst LSP: completion, diagnostics, formatting)
 #   - clangd                 (C++ LSP, for competitive-programming autocomplete)
 #   - WinLibs (GCC/MinGW)   (a REAL g++, not clang -- see note below)
-#   - Temurin JDK 17         (Java project compiler/runtime target)
+#   - Temurin JDK 17         (generic Java project compiler/runtime target)
 #   - Temurin JDK 21         (runtime required by the current Java language server)
+#   - Temurin JDK 25         (current Minecraft 26.x mod toolchains)
 #   - Python 3.13            (Python runtime; editor tooling is isolated by Mason)
 #   - tree-sitter CLI       (parser compiler used by nvim-treesitter)
 #   - StyLua                (formatter used for this Neovim config)
@@ -62,11 +63,35 @@ function Invoke-NativeChecked($label, $command, $arguments) {
     }
 }
 
+function Get-TrustedWingetPath {
+    $package = Get-AppxPackage -Name "Microsoft.DesktopAppInstaller" -AllUsers |
+        Sort-Object Version -Descending |
+        Select-Object -First 1
+    if (-not $package) {
+        throw "Windows Package Manager is missing. Install 'App Installer' from the Microsoft Store, then re-run."
+    }
+
+    $windowsAppsRoot = [System.IO.Path]::GetFullPath((Join-Path $env:ProgramFiles "WindowsApps")).TrimEnd('\') + '\'
+    $wingetPath = [System.IO.Path]::GetFullPath((Join-Path $package.InstallLocation "winget.exe"))
+    if (-not $wingetPath.StartsWith($windowsAppsRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing unexpected winget path outside protected WindowsApps: $wingetPath"
+    }
+    if (-not (Test-Path $wingetPath -PathType Leaf)) {
+        throw "Windows Package Manager executable not found in App Installer: $wingetPath"
+    }
+
+    $signature = Get-AuthenticodeSignature $wingetPath
+    if ($signature.Status -ne [System.Management.Automation.SignatureStatus]::Valid) {
+        throw "Refusing winget with invalid Authenticode signature at $wingetPath (status: $($signature.Status))."
+    }
+    return $wingetPath
+}
+
 # ----------------------------------------------------------------------------
 # Helper: is a winget package installed? Install it if not.
 # ----------------------------------------------------------------------------
 function Test-WingetInstalled($id) {
-    & winget list --id $id --exact --accept-source-agreements *> $null
+    & $script:WingetPath list --id $id --exact --accept-source-agreements *> $null
     switch ([int]$LASTEXITCODE) {
         0 { return $true }
         -1978335212 { return $false } # APPINSTALLER_CLI_ERROR_NO_APPLICATIONS_FOUND
@@ -80,7 +105,7 @@ function Install-WingetPackage($id, $name) {
         return
     }
     Write-Step "Installing $name ($id)..."
-    Invoke-NativeChecked "winget install for $name" "winget" @(
+    Invoke-NativeChecked "winget install for $name" $script:WingetPath @(
         "install", "--id", $id, "--exact", "--silent",
         "--accept-package-agreements", "--accept-source-agreements"
     )
@@ -162,6 +187,9 @@ function Get-MissingTools {
     if (-not (Get-TemurinJdkHome 21)) {
         $missing.Add("Temurin JDK 21")
     }
+    if (-not (Get-TemurinJdkHome 25)) {
+        $missing.Add("Temurin JDK 25")
+    }
 
     return $missing
 }
@@ -170,9 +198,8 @@ function Get-MissingTools {
 # 0. Sanity: winget must exist (ships with modern Windows 11; if missing, the
 #    user needs App Installer from the Microsoft Store).
 # ----------------------------------------------------------------------------
-if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-    throw "winget not found. Install 'App Installer' from the Microsoft Store, then re-run."
-}
+$script:WingetPath = Get-TrustedWingetPath
+Write-Done "Using trusted Windows Package Manager at $script:WingetPath."
 
 # ----------------------------------------------------------------------------
 # 1. Toolchain, all via winget.
@@ -187,6 +214,7 @@ Install-WingetPackage "LLVM.clangd"                        "clangd (C++ LSP)"
 Install-WingetPackage "BrechtSanders.WinLibs.POSIX.UCRT"   "WinLibs (real GCC/g++)"
 Install-WingetPackage "EclipseAdoptium.Temurin.17.JDK"     "Temurin JDK 17 (Java project runtime)"
 Install-WingetPackage "EclipseAdoptium.Temurin.21.JDK"     "Temurin JDK 21 (Java language-server runtime)"
+Install-WingetPackage "EclipseAdoptium.Temurin.25.JDK"     "Temurin JDK 25 (current Minecraft mod runtime/toolchain)"
 Install-WingetPackage "Python.Python.3.13"                  "Python 3.13"
 Install-WingetPackage "tree-sitter.tree-sitter-cli"        "tree-sitter CLI"
 Install-WingetPackage "JohnnyMorganz.StyLua"               "StyLua"

@@ -1,6 +1,8 @@
 # Neovim config: LF everywhere. Windows Neovim reads LF fine, and LF avoids
 # any tooling that chokes on CRLF in Lua.
 *.lua           text eol=lf
+*.py            text eol=lf
+templates/*     text eol=lf
 
 # Windows scripts: force CRLF. PowerShell tolerates LF, but cmd.exe can
 # genuinely misparse batch files with LF-only endings (labels/GOTO edge

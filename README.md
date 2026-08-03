@@ -1,7 +1,8 @@
 # Neovim technical IDE - native Windows dotfiles
 
-This repo is a Windows-native Neovim setup for five daily workflows:
+This repo is a Windows-native Neovim setup for six daily workflows:
 
+- shared C++/Java/Python template generation in both the shell and Neovim
 - C++ competitive programming with a reliable `g++` build/run loop
 - Typst writing with Tinymist LSP, browser preview, and manual PDF export
 - Lightweight class notes in Typst or Markdown without a PKM framework
@@ -30,13 +31,17 @@ powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1
 Both phases are idempotent. Together they will:
 
 - install Git, Neovim, Neovide, JetBrainsMono Nerd Font, Typst, Tinymist,
-  clangd, WinLibs `g++`, Temurin JDK 17 and 21, Python 3.13, tree-sitter CLI,
+  clangd, WinLibs `g++`, Temurin JDK 17, 21, and 25, Python 3.13,
+  tree-sitter CLI,
   StyLua, ripgrep, and fd via
   `winget`
 - refresh PATH in-process and fail clearly if required tools are still missing
 - symlink `nvim/` from this repo to `%LOCALAPPDATA%\nvim`, backing up any
   existing config first
 - return to the normal user before running plugin code
+- install `templatecpp`, `templatejava`, and `templatepy` into
+  `%LOCALAPPDATA%\Programs\cp-template\bin`, copy their shared templates and
+  CLI support files together, and add that user-local bin directory to PATH
 - install version-pinned JDTLS, BasedPyright, and Ruff as editor-only Mason tools
 - configure Neovide to open in your Windows Desktop directory with direct,
   non-animated cursor and scrolling behavior; the editor selects the
@@ -51,6 +56,64 @@ window. Neovide is the recommended daily driver because it avoids legacy console
 input/font issues and already uses the configured Nerd Font. Start-menu launches
 open in your Windows Desktop directory.
 
+The template commands are installed for the current user only. `bootstrap.ps1`
+updates the current process PATH immediately; a **new** Windows Terminal or
+PowerShell window will also pick them up automatically.
+
+## Template toolkit: shell + Neovim share the same files
+
+Canonical templates live under the repo's root `templates/` directory. Neovim
+reads them directly; `bootstrap.ps1` refreshes the shell commands' user-local
+copy. This keeps one source of truth while allowing the shell commands to work
+from any directory without depending on the repo staying at the same path.
+
+Quick shell examples from any Windows terminal after install:
+
+```powershell
+templatecpp
+templatecpp contest/round-1/solve
+templatejava .\practice\PracticeSession
+templatepy ".\scratch dir"
+```
+
+Behavior and safety rules:
+
+- default targets are `main.cpp`, `Main.java`, and `main.py`
+- suffix-less targets get the language suffix appended automatically
+- an existing directory target gets the default filename inside it
+- parent directories are created automatically
+- existing files are **never** overwritten unless you pass `-f` / `--force`
+- Java derives `public class` from the output filename stem and rejects invalid
+  identifiers early
+
+Each command prints the created absolute path plus a short next-step hint such
+as the Java compile/run command.
+
+Inside Neovim, open a blank `cpp`, `java`, or `python` buffer and press
+`<leader>it`. The matching template is inserted from the same canonical source,
+the cursor lands inside `solve()`, and Neovim enters insert mode. Buffer-local
+commands are:
+
+- `:TemplateCpp`
+- `:TemplateJava`
+- `:TemplatePython`
+- `:CppTemplate` (C++ compatibility alias)
+- `:TemplateCPP` (historical Vim compatibility alias)
+
+Templates only insert into a truly blank buffer. Nonblank buffers are left
+unchanged.
+
+## Update flow
+
+After `git pull` or any local template/config change, re-run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1
+```
+
+That refreshes the user-local template commands, PATH for the current process,
+Neovim plugin/bootstrap validation, and other managed user-side setup.
+
 ## Daily workflows
 
 ### 1) C++: build, quickfix, and one reusable scratch panel
@@ -59,7 +122,7 @@ Open a `*.cpp` buffer and use the buffer-local keys below:
 
 - `<F6>` - save and build asynchronously
 - `<F5>` - save, build asynchronously, then open a bottom input panel for the compiled `.exe`
-- `<leader>it` - insert the contest template into a blank C++ buffer
+- `<leader>it` - insert the shared C++ template into a blank C++ buffer
 - `<leader>rx` - stop the running program if needed and close its run panel
 - `<leader>rp` - toggle the run panel between the bottom and the right side
   (also `:CppPanelSide`; works from the panel too, and moves it live without
@@ -120,7 +183,9 @@ Buffer-local commands for the same flow:
 
 - `:CppBuild`
 - `:CppBuildRun`
-- `:CppTemplate`
+- `:CppTemplate` (compatibility alias for `:TemplateCpp`)
+- `:TemplateCPP` (historical Vim compatibility alias)
+- `:TemplateCpp`
 - `:CppClose`
 
 The template action refuses to overwrite a nonblank file and leaves the cursor
@@ -171,16 +236,23 @@ are applied buffer-locally and do not leak into C++ buffers.
 
 - Open a Java file inside a Maven, Gradle, or Ant project. JDTLS discovers the
   project root and keeps a separate workspace under Neovim's cache.
-- Java 17 is the project compiler/runtime target. JDTLS runs on Java 21 because
-  current JDTLS releases require it; the installer configures both roles.
+- Java 17 is the generic project compiler/runtime target. JDTLS runs on Java 21
+  because current JDTLS releases require it; the installer configures both
+  roles and also installs Java 25 for current Minecraft 26.x toolchains.
 - Completion, diagnostics, rename, go-to-definition, import organization, and
   extract-variable/constant/method refactors are available through normal LSP
   and `<leader>c...` actions.
 - `<F5>` saves and runs the current source directly with Java 17 source-file
   mode in a reusable terminal panel. This is ideal for standalone exercises;
   Maven/Gradle applications should keep using their project-defined run task.
+- `<leader>it` or `:TemplateJava` inserts a simple single-file Java practice
+  template with `BufferedReader`, `StringBuilder`, and a filename-derived public
+  class.
 - Debugging and Java test adapters are intentionally not installed yet. They add
   several packages and expensive project scans; add them only when needed.
+
+This single-file Java mode is for exercises, interview practice, and competitive
+programming. It is **not** a Minecraft mod project generator.
 
 ### 5) Python: typed, formatted project editing
 
@@ -191,6 +263,26 @@ are applied buffer-locally and do not leak into C++ buffers.
   different environment; the selection is cached by the Python extra.
 - `<F5>` saves and runs the current file, preferring the interpreter selected by
   `<leader>cv`, then the project's `.venv`, then the installed system Python.
+- `<leader>it` or `:TemplatePython` inserts a small typed `solve()`/`main()`
+  starter that runs without stdin by default.
+
+## Minecraft mod projects: use the official generators and toolchains
+
+Keep the generic Java template for plain source files only. For actual Fabric or
+NeoForge mod work, use the official project scaffolding and let Gradle manage
+the Java toolchain per project.
+
+- Current Fabric/NeoForge **26.x** projects use **JDK 25**
+- Older **1.21.x** project docs use **JDK 21**
+- Prefer the Gradle wrapper plus Java toolchains instead of changing your global
+  Java install manually for each project
+
+Official references:
+
+- Fabric setup: https://docs.fabricmc.net/develop/getting-started/setting-up
+- Fabric project creation: https://docs.fabricmc.net/develop/getting-started/creating-a-project
+- NeoForge getting started: https://docs.neoforged.net/docs/gettingstarted/
+- Gradle toolchains: https://docs.gradle.org/current/userguide/toolchains.html
 
 ## Key reference
 
@@ -202,7 +294,7 @@ are applied buffer-locally and do not leak into C++ buffers.
 | `<F5>` | `java` buffer | Save and run the current source as Java 17 |
 | `<F5>` | `python` buffer | Save and run with the selected/project interpreter |
 | `<F6>` | `cpp` buffer only | Build only |
-| `<leader>it` | `cpp` buffer only | Insert contest template into a blank file |
+| `<leader>it` | `cpp`, `java`, or `python` buffer | Insert the matching shared template into a blank file |
 | `<leader>rx` | `cpp`, `java`, or `python` buffer | Stop and close its run panel |
 | `<leader>rp` | `cpp` buffer / run panel | Toggle panel between bottom and right |
 | `<leader>tp` | `typst` buffer only | Toggle Typst browser preview |
@@ -239,6 +331,9 @@ Then verify the external tools directly in a new PowerShell or Windows Terminal:
 git --version
 nvim --version
 neovide --version
+templatecpp --help
+templatejava --help
+templatepy --help
 gcc --version
 g++ --version
 java --version
@@ -297,6 +392,7 @@ nvim --headless -u NONE "+lua dofile('tests/java_e2e.lua')" +qa
 nvim --headless -u NONE "+lua dofile('tests/python_e2e.lua')" +qa
 nvim --headless -u NONE "+lua dofile('tests/language_run_e2e.lua')" +qa
 nvim --headless "+lua dofile('tests/language_lsp_e2e.lua')" +qa
+python .\tests\template_cli_e2e.py
 powershell -ExecutionPolicy Bypass -File .\tests\bootstrap_failure.ps1
 ```
 
@@ -316,6 +412,9 @@ They assert that:
   an existing note
 - Java sources compile with `javac --release 17` and run successfully
 - Python sources run successfully from paths containing spaces
+- the template CLI covers defaults, suffix appending, overwrite safety, spaced
+  paths, Java class substitution, and compile/run smoke checks when toolchains
+  exist
 - Java/Python `<F5>` mappings stay buffer-local and produce real terminal output
 - JDTLS, BasedPyright, and Ruff attach to minimal project fixtures
 - bootstrap Lua/module failures force a nonzero Neovim process exit

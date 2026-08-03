@@ -581,73 +581,7 @@ function M.build_and_run()
 end
 
 function M.insert_template()
-	local bufnr = vim.api.nvim_get_current_buf()
-	local current = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-	if #current ~= 1 or current[1]:match("%S") then
-		notify("C++ template can only be inserted into a blank buffer.", vim.log.levels.WARN, "C++ template")
-		return
-	end
-
-	local template = {
-		'#pragma GCC optimize("O3,unroll-loops")',
-		'#pragma GCC target("avx2,bmi,bmi2,lzcnt,popcnt")',
-		"#include <bits/stdc++.h>",
-		"using namespace std;",
-		"",
-		"using ll = long long;",
-		"using ld = long double;",
-		"using pii = pair<int, int>;",
-		"using pll = pair<ll, ll>;",
-		"using vi = vector<int>;",
-		"using vll = vector<ll>;",
-		"",
-		"const int INF = 1e9;",
-		"const ll LINF = 1e18;",
-		"const int MOD = 1e9 + 7;",
-		"",
-		"#define FASTIO ios_base::sync_with_stdio(false);cin.tie(NULL);",
-		"#define all(x) (x).begin(), (x).end()",
-		"#define sz(x) ((int)(x).size())",
-		"#define pb push_back",
-		"#define eb emplace_back",
-		"#define f first",
-		"#define s second",
-		"",
-		"template<typename T> bool chmin(T& a, const T& b) {",
-		"    if (b < a) { a = b; return true; }",
-		"    return false;",
-		"}",
-		"template<typename T> bool chmax(T& a, const T& b) {",
-		"    if (a < b) { a = b; return true; }",
-		"    return false;",
-		"}",
-		"",
-		"void solve() {",
-		"    ",
-		"}",
-		"",
-		"int main() {",
-		"    FASTIO;",
-		"    int t = 1;",
-		"    cin >> t;",
-		"    while (t--) {",
-		"        solve();",
-		"    }",
-		"    return 0;",
-		"}",
-	}
-
-	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, template)
-	local solve_body_line
-	for lnum, line in ipairs(template) do
-		if line == "void solve() {" then
-			solve_body_line = lnum + 1
-			break
-		end
-	end
-	assert(solve_body_line, "C++ template is missing solve()")
-	vim.api.nvim_win_set_cursor(0, { solve_body_line, #template[solve_body_line] })
-	vim.cmd("startinsert!")
+	return require("config.language_templates").insert_template("cpp")
 end
 
 local function attach_to_cpp_buffer(bufnr)
@@ -666,12 +600,6 @@ local function attach_to_cpp_buffer(bufnr)
 		vim.tbl_extend("force", opts, { desc = "C++: build and run" })
 	)
 	vim.keymap.set({ "n", "i", "v" }, "<F6>", M.build, vim.tbl_extend("force", opts, { desc = "C++: build only" }))
-	vim.keymap.set(
-		"n",
-		"<leader>it",
-		M.insert_template,
-		vim.tbl_extend("force", opts, { desc = "C++: insert template" })
-	)
 	vim.keymap.set("n", "<leader>rx", M.close_panel, vim.tbl_extend("force", opts, { desc = "C++: close run panel" }))
 	vim.keymap.set(
 		"n",
@@ -686,12 +614,6 @@ local function attach_to_cpp_buffer(bufnr)
 		"CppBuildRun",
 		M.build_and_run,
 		{ desc = "Compile and open the C++ input panel" }
-	)
-	vim.api.nvim_buf_create_user_command(
-		bufnr,
-		"CppTemplate",
-		M.insert_template,
-		{ desc = "Insert C++ contest template" }
 	)
 	vim.api.nvim_buf_create_user_command(
 		bufnr,

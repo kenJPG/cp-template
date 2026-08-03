@@ -7,7 +7,6 @@ local windows_runtime = require("config.windows_runtime")
 local python_home = windows_runtime.python_home()
 
 return {
-	{ import = "lazyvim.plugins.extras.lang.python" },
 	{
 		"neovim/nvim-lspconfig",
 		opts = {

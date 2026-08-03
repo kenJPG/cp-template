@@ -7,6 +7,7 @@ local indent_group = vim.api.nvim_create_augroup("cp_template_c_indent", { clear
 
 require("config.cpp_tasks").setup()
 require("config.language_run").setup()
+require("config.language_templates").setup()
 require("config.notes").setup()
 
 local function apply_prose_settings()

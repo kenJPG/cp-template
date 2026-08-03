@@ -132,6 +132,97 @@ function Set-ClangdConfig {
     Write-Done "clangd will query $gxx for MinGW C++ headers."
 }
 
+function Copy-ManagedFiles($sourcePaths, $destinationDir) {
+    if (-not (Test-Path $destinationDir -PathType Container)) {
+        New-Item -ItemType Directory -Path $destinationDir -Force | Out-Null
+    }
+
+    foreach ($sourcePath in $sourcePaths) {
+        if (-not (Test-Path $sourcePath)) {
+            throw "Managed install source is missing: $sourcePath"
+        }
+        Copy-Item $sourcePath -Destination $destinationDir -Recurse -Force
+    }
+}
+
+function Normalize-PathEntry($pathValue) {
+    $expanded = [System.Environment]::ExpandEnvironmentVariables($pathValue).Trim()
+    if ([string]::IsNullOrWhiteSpace($expanded)) {
+        return $null
+    }
+    return $expanded.TrimEnd('\')
+}
+
+function Add-UserPathEntry($entry) {
+    $entry = Normalize-PathEntry([System.IO.Path]::GetFullPath($entry))
+    $userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+    $entries = if ([string]::IsNullOrWhiteSpace($userPath)) { @() } else { $userPath -split ';' }
+    $alreadyPresent = $false
+    foreach ($existing in $entries) {
+        $normalizedExisting = Normalize-PathEntry($existing)
+        if (-not $normalizedExisting) {
+            continue
+        }
+        if ([System.String]::Equals($normalizedExisting, $entry, [System.StringComparison]::OrdinalIgnoreCase)) {
+            $alreadyPresent = $true
+            break
+        }
+    }
+
+    if (-not $alreadyPresent) {
+        $updatedEntries = @($entries | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) + $entry
+        [System.Environment]::SetEnvironmentVariable("Path", ($updatedEntries -join ';'), "User")
+        Write-Done "Added $entry to the current user's PATH."
+    } else {
+        Write-Done "$entry is already present on the current user's PATH."
+    }
+
+    Refresh-Path
+    $processEntries = ($env:Path -split ';') | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    $processHasEntry = $false
+    foreach ($existing in $processEntries) {
+        $normalizedExisting = Normalize-PathEntry($existing)
+        if ($normalizedExisting -and [System.String]::Equals($normalizedExisting, $entry, [System.StringComparison]::OrdinalIgnoreCase)) {
+            $processHasEntry = $true
+            break
+        }
+    }
+    if (-not $processHasEntry) {
+        $env:Path = "$entry;$env:Path"
+    }
+}
+
+function Install-TemplateCommands {
+    $installRoot = Join-Path $env:LOCALAPPDATA "Programs\cp-template"
+    $binDir = Join-Path $installRoot "bin"
+
+    if (Test-Path $installRoot) {
+        Remove-Item $installRoot -Recurse -Force
+    }
+
+    Copy-ManagedFiles @(
+        (Join-Path $PSScriptRoot "commands")
+    ) $installRoot
+    Copy-ManagedFiles @(
+        (Join-Path $PSScriptRoot "templates")
+    ) $installRoot
+    Copy-ManagedFiles @(
+        (Join-Path $PSScriptRoot "templatecpp.cmd"),
+        (Join-Path $PSScriptRoot "templatejava.cmd"),
+        (Join-Path $PSScriptRoot "templatepy.cmd")
+    ) $binDir
+
+    Add-UserPathEntry $binDir
+
+    foreach ($command in @("templatecpp.cmd", "templatejava.cmd", "templatepy.cmd")) {
+        if (-not (Get-Command $command -ErrorAction SilentlyContinue)) {
+            throw "Installed template command is not available on PATH: $command"
+        }
+    }
+
+    Write-Done "Installed template commands under $installRoot. New terminals will pick up PATH automatically."
+}
+
 Refresh-Path
 $pythonHome = Get-PythonHome
 $env:Path = "$pythonHome;$env:Path"
@@ -159,9 +250,10 @@ if ($LASTEXITCODE -ne 0) {
 
 $jdk17 = Get-TemurinJdkHome 17
 $jdk21 = Get-TemurinJdkHome 21
+$jdk25 = Get-TemurinJdkHome 25
 $env:JAVA_HOME = $jdk21
 $env:Path = "$(Join-Path $jdk21 'bin');$env:Path"
-Write-Done "Java projects target $jdk17; JDTLS runs on $jdk21."
+Write-Done "Java projects target $jdk17; JDTLS runs on $jdk21; Minecraft 26.x toolchains can use $jdk25."
 
 # tree-sitter defaults to Visual C++ on Windows when no compiler is specified.
 # WinLibs is already installed, so make the parser build use that known toolchain.
@@ -173,6 +265,9 @@ Set-NeovideConfig
 
 Write-Step "Aligning clangd with the active g++ toolchain..."
 Set-ClangdConfig
+
+Write-Step "Installing templatecpp/templatejava/templatepy for the current user..."
+Install-TemplateCommands
 
 $lockPath = Join-Path $PSScriptRoot "nvim\lazy-lock.json"
 $lockBytes = [System.IO.File]::ReadAllBytes($lockPath)

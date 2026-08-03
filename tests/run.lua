@@ -19,6 +19,7 @@ bootstrap.load_autocmds()
 
 local cpp_tasks = require("config.cpp_tasks")
 local language_run = require("config.language_run")
+local windows_runtime = require("config.windows_runtime")
 local colorscheme_plugin_spec = dofile(vim.fs.joinpath(bootstrap.nvim_root, "lua", "plugins", "colorscheme.lua"))
 local cpp_plugin_spec = dofile(vim.fs.joinpath(bootstrap.nvim_root, "lua", "plugins", "cpp.lua"))
 local editor_plugin_spec = dofile(vim.fs.joinpath(bootstrap.nvim_root, "lua", "plugins", "editor.lua"))
@@ -39,7 +40,7 @@ local function assert_true(value, message)
 end
 
 local function assert_equal(actual, expected, message)
-	if actual ~= expected then
+	if not vim.deep_equal(actual, expected) then
 		fail(string.format("%s (expected %s, got %s)", message, vim.inspect(expected), vim.inspect(actual)))
 	end
 end
@@ -86,14 +87,6 @@ local function find_plugin(spec, name)
 	end
 end
 
-local function find_import(spec, name)
-	for _, item in ipairs(spec) do
-		if item.import == name then
-			return item
-		end
-	end
-end
-
 assert_true(not global_map_exists("n", "<F5>"), "<F5> should not be a global normal-mode map")
 assert_true(not global_map_exists("n", "<F6>"), "<F6> should not be a global normal-mode map")
 assert_equal(vim.g.neovide_cursor_animation_length, 0, "Neovide cursor animation should be disabled")
@@ -134,26 +127,43 @@ if gxx ~= "" then
 end
 assert_equal(clangd.cmd[#clangd.cmd], "--fallback-style=none", "clangd should preserve standalone contest formatting")
 
-assert_true(find_import(java_plugin_spec, "lazyvim.plugins.extras.lang.java") ~= nil, "Java extra should be enabled")
+local init_source = table.concat(vim.fn.readfile(vim.fs.joinpath(bootstrap.nvim_root, "init.lua")), "\n")
+local lazyvim_core_position = assert(init_source:find('import = "lazyvim.plugins"', 1, true))
+local java_extra_position = assert(init_source:find('import = "lazyvim.plugins.extras.lang.java"', 1, true))
+local python_extra_position = assert(init_source:find('import = "lazyvim.plugins.extras.lang.python"', 1, true))
+local local_plugins_position = assert(init_source:find('import = "plugins"', 1, true))
+assert_true(lazyvim_core_position < java_extra_position, "LazyVim core must load before Java extra")
+assert_true(java_extra_position < python_extra_position, "LazyVim extras should remain grouped together")
+assert_true(python_extra_position < local_plugins_position, "LazyVim extras must load before local plugins")
+
 local jdtls = find_plugin(java_plugin_spec, "mfussenegger/nvim-jdtls")
 assert_true(jdtls ~= nil, "Java support should configure nvim-jdtls")
 local java_lsp = find_plugin(java_plugin_spec, "neovim/nvim-lspconfig")
 assert_equal(java_lsp.opts.servers.jdtls.mason, false, "JDTLS should use the pinned bootstrap installer")
+local previous_temurin_home_for_jdtls = windows_runtime.temurin_home
+windows_runtime.temurin_home = function(major)
+	return ({
+		[17] = "C:/Program Files/Eclipse Adoptium/jdk-17.0.99",
+		[21] = "C:/Program Files/Eclipse Adoptium/jdk-21.0.99",
+		[25] = "C:/Program Files/Eclipse Adoptium/jdk-25.0.99",
+	})[major]
+end
 local jdtls_opts = {}
 jdtls.opts(nil, jdtls_opts)
+windows_runtime.temurin_home = previous_temurin_home_for_jdtls
 assert_equal(jdtls_opts.dap, false, "Java debugging should stay disabled until explicitly needed")
 assert_equal(jdtls_opts.test, false, "Java test adapters should stay disabled until explicitly needed")
 assert_true(jdtls_opts.cmd[1]:match("mason[/\\]bin[/\\]jdtls") ~= nil, "JDTLS should use the pinned Mason command")
+assert_equal(jdtls_opts.settings.java.configuration.runtimes[1].name, "JavaSE-17", "JDTLS should expose Java 17")
+assert_equal(jdtls_opts.settings.java.configuration.runtimes[1].default, true, "Java 17 should remain the default source-file target")
+assert_equal(jdtls_opts.settings.java.configuration.runtimes[2].name, "JavaSE-21", "JDTLS should expose Java 21")
+assert_equal(jdtls_opts.settings.java.configuration.runtimes[3].name, "JavaSE-25", "JDTLS should expose Java 25 for Minecraft projects")
 assert_equal(
 	jdtls_opts.settings.java.inlayHints.parameterNames.enabled,
 	"none",
 	"Java parameter inlay hints should remain hidden"
 )
 
-assert_true(
-	find_import(python_plugin_spec, "lazyvim.plugins.extras.lang.python") ~= nil,
-	"Python extra should be enabled"
-)
 local python_lsp = find_plugin(python_plugin_spec, "neovim/nvim-lspconfig")
 assert_true(python_lsp ~= nil, "Python support should configure nvim-lspconfig")
 assert_equal(
@@ -204,8 +214,11 @@ assert_equal(
 
 assert_true(map_exists(preloaded_cpp_buf, "n", "<F5>"), "already-open cpp buffers should receive <F5>")
 assert_true(map_exists(preloaded_cpp_buf, "n", "<F6>"), "already-open cpp buffers should receive <F6>")
+assert_true(map_exists(preloaded_cpp_buf, "n", " it"), "already-open cpp buffers should receive <leader>it")
 assert_true(map_exists(preloaded_java_buf, "n", "<F5>"), "already-open Java buffers should receive <F5>")
+assert_true(map_exists(preloaded_java_buf, "n", " it"), "already-open Java buffers should receive <leader>it")
 assert_true(map_exists(preloaded_python_buf, "n", "<F5>"), "already-open Python buffers should receive <F5>")
+assert_true(map_exists(preloaded_python_buf, "n", " it"), "already-open Python buffers should receive <leader>it")
 assert_true(vim.api.nvim_get_option_value("cindent", { buf = preloaded_cpp_buf }), "cpp should enable cindent locally")
 assert_equal(vim.b[preloaded_cpp_buf].autoformat, false, "cpp should preserve contest formatting on save")
 assert_equal(
@@ -227,30 +240,38 @@ assert_true(map_exists(cpp_buf, "i", "<F6>"), "<F6> should exist in cpp insert m
 assert_true(map_exists(cpp_buf, "v", "<F6>"), "<F6> should exist in cpp visual mode")
 assert_true(map_exists(cpp_buf, "n", " it"), "<leader>it should exist in cpp normal mode")
 assert_true(map_exists(cpp_buf, "n", " rx"), "<leader>rx should close the C++ run panel")
+assert_true(vim.api.nvim_buf_get_commands(cpp_buf, {}).TemplateCpp ~= nil, "TemplateCpp should exist in C++ buffers")
+assert_true(vim.api.nvim_buf_get_commands(cpp_buf, {}).CppTemplate ~= nil, "CppTemplate should remain available in C++ buffers")
+assert_true(vim.api.nvim_buf_get_commands(cpp_buf, {}).TemplateCPP ~= nil, "historical TemplateCPP should remain available")
 assert_true(vim.api.nvim_buf_get_commands(cpp_buf, {}).CppClose ~= nil, "CppClose should exist in C++ buffers")
 assert_equal(vim.b[cpp_buf].autoformat, false, "new cpp buffers should disable format-on-save")
 
 vim.cmd("enew")
-vim.cmd("file Main.java")
+vim.cmd("file PracticeSession.java")
 vim.cmd("setfiletype java")
 local java_buf = vim.api.nvim_get_current_buf()
 assert_true(map_exists(java_buf, "n", "<F5>"), "<F5> should exist in Java normal mode")
 assert_true(map_exists(java_buf, "i", "<F5>"), "<F5> should exist in Java insert mode")
 assert_true(map_exists(java_buf, "v", "<F5>"), "<F5> should exist in Java visual mode")
+assert_true(map_exists(java_buf, "n", " it"), "<leader>it should exist in Java normal mode")
 assert_true(vim.api.nvim_buf_get_commands(java_buf, {}).LanguageRun ~= nil, "LanguageRun should exist in Java buffers")
+assert_true(vim.api.nvim_buf_get_commands(java_buf, {}).TemplateJava ~= nil, "TemplateJava should exist in Java buffers")
 
 vim.cmd("enew")
-vim.cmd("file main.py")
+vim.cmd("file practice.py")
 vim.cmd("setfiletype python")
 local python_buf = vim.api.nvim_get_current_buf()
 assert_true(map_exists(python_buf, "n", "<F5>"), "<F5> should exist in Python normal mode")
 assert_true(map_exists(python_buf, "i", "<F5>"), "<F5> should exist in Python insert mode")
 assert_true(map_exists(python_buf, "v", "<F5>"), "<F5> should exist in Python visual mode")
+assert_true(map_exists(python_buf, "n", " it"), "<leader>it should exist in Python normal mode")
 assert_true(
 	vim.api.nvim_buf_get_commands(python_buf, {}).LanguageRun ~= nil,
 	"LanguageRun should exist in Python buffers"
 )
+assert_true(vim.api.nvim_buf_get_commands(python_buf, {}).TemplatePython ~= nil, "TemplatePython should exist in Python buffers")
 
+local cpp_template_file = vim.fn.readfile(vim.fs.joinpath(bootstrap.repo_root, "templates", "cpp.cpp"))
 vim.api.nvim_set_current_buf(cpp_buf)
 vim.cmd("CppTemplate")
 local template_cursor = vim.api.nvim_win_get_cursor(0)
@@ -258,39 +279,64 @@ assert_equal(template_cursor[1], 35, "C++ template cursor should land on the sol
 assert_equal(template_cursor[2], 4, "C++ template insert cursor should follow all four indentation spaces")
 vim.cmd("stopinsert")
 local template_lines = vim.api.nvim_buf_get_lines(cpp_buf, 0, -1, false)
-assert_equal(
-	template_lines[1],
-	'#pragma GCC optimize("O3,unroll-loops")',
-	"C++ template should enable GCC optimizations"
-)
-assert_equal(
-	template_lines[2],
-	'#pragma GCC target("avx2,bmi,bmi2,lzcnt,popcnt")',
-	"C++ template should set CPU targets"
-)
-assert_equal(template_lines[3], "#include <bits/stdc++.h>", "C++ template should include the contest header")
-assert_equal(
-	template_lines[17],
-	"#define FASTIO ios_base::sync_with_stdio(false);cin.tie(NULL);",
-	"C++ template should define fast I/O"
-)
-assert_equal(
-	template_lines[25],
-	"template<typename T> bool chmin(T& a, const T& b) {",
-	"C++ template should define chmin"
-)
-assert_equal(template_lines[34], "void solve() {", "C++ template should define solve")
-assert_equal(template_lines[41], "    cin >> t;", "C++ template should read the test count")
-assert_equal(template_lines[43], "        solve();", "C++ template should call solve")
+assert_equal(template_lines, cpp_template_file, "C++ insertion should match the canonical shared template")
 
 local template_snapshot = table.concat(template_lines, "\n")
-vim.cmd("CppTemplate")
+vim.cmd("TemplateCpp")
 assert_equal(
 	table.concat(vim.api.nvim_buf_get_lines(cpp_buf, 0, -1, false), "\n"),
 	template_snapshot,
 	"C++ template should not overwrite a nonblank buffer"
 )
 vim.bo[cpp_buf].modified = false
+
+vim.api.nvim_set_current_buf(java_buf)
+vim.cmd("TemplateJava")
+local java_cursor = vim.api.nvim_win_get_cursor(0)
+local java_lines = vim.api.nvim_buf_get_lines(java_buf, 0, -1, false)
+assert_equal(java_lines[5], "public class PracticeSession {", "Java template should substitute the filename stem")
+assert_true(not table.concat(java_lines, "\n"):find("{{CLASS_NAME}}", 1, true), "Java template should replace every class placeholder")
+assert_equal(java_lines[java_cursor[1]], "        ", "Java cursor should land on the blank solve body line")
+assert_equal(java_cursor[2], #java_lines[java_cursor[1]], "Java cursor should land at the end of the solve body line")
+vim.cmd("stopinsert")
+local java_snapshot = table.concat(java_lines, "\n")
+vim.cmd("TemplateJava")
+assert_equal(
+	table.concat(vim.api.nvim_buf_get_lines(java_buf, 0, -1, false), "\n"),
+	java_snapshot,
+	"Java template should not overwrite a nonblank buffer"
+)
+vim.bo[java_buf].modified = false
+
+vim.cmd("enew")
+vim.cmd("file exports.java")
+vim.cmd("setfiletype java")
+local reserved_java_buf = vim.api.nvim_get_current_buf()
+pcall(vim.cmd, "TemplateJava")
+assert_equal(
+	vim.api.nvim_buf_get_lines(reserved_java_buf, 0, -1, false),
+	{ "" },
+	"Java template should reject reserved public class names"
+)
+vim.bo[reserved_java_buf].modified = false
+
+vim.api.nvim_set_current_buf(python_buf)
+vim.cmd("TemplatePython")
+local python_cursor = vim.api.nvim_win_get_cursor(0)
+local python_lines = vim.api.nvim_buf_get_lines(python_buf, 0, -1, false)
+assert_equal(python_lines[4], "def solve() -> None:", "Python template should define solve()")
+assert_equal(python_lines[6], "    pass", "Python template should remain runnable before solve is implemented")
+assert_equal(python_lines[python_cursor[1]], "    ", "Python cursor should land on the blank solve body line")
+assert_equal(python_cursor[2], #python_lines[python_cursor[1]], "Python cursor should land at the end of the solve body line")
+vim.cmd("stopinsert")
+local python_snapshot = table.concat(python_lines, "\n")
+vim.cmd("TemplatePython")
+assert_equal(
+	table.concat(vim.api.nvim_buf_get_lines(python_buf, 0, -1, false), "\n"),
+	python_snapshot,
+	"Python template should not overwrite a nonblank buffer"
+)
+vim.bo[python_buf].modified = false
 
 vim.cmd("enew")
 vim.cmd("file notes.md")
@@ -300,6 +346,9 @@ local markdown_buf = vim.api.nvim_get_current_buf()
 assert_true(not map_exists(markdown_buf, "n", "<F5>"), "<F5> must be absent in markdown")
 assert_true(not map_exists(markdown_buf, "n", "<F6>"), "<F6> must be absent in markdown")
 assert_true(not map_exists(markdown_buf, "n", " it"), "C++ template map must be absent in markdown")
+assert_true(vim.api.nvim_buf_get_commands(markdown_buf, {}).TemplateCpp == nil, "TemplateCpp must be absent in markdown")
+assert_true(vim.api.nvim_buf_get_commands(markdown_buf, {}).TemplateJava == nil, "TemplateJava must be absent in markdown")
+assert_true(vim.api.nvim_buf_get_commands(markdown_buf, {}).TemplatePython == nil, "TemplatePython must be absent in markdown")
 assert_true(window_option("wrap"), "markdown should enable wrap")
 assert_true(window_option("linebreak"), "markdown should enable linebreak")
 assert_true(window_option("breakindent"), "markdown should enable breakindent")
@@ -398,7 +447,6 @@ assert_true(
 )
 package.loaded["venv-selector"] = previous_selector
 
-local windows_runtime = require("config.windows_runtime")
 local previous_temurin_home = windows_runtime.temurin_home
 local fake_jdk = vim.fs.joinpath(runner_root, "jdk 17")
 local fake_java = vim.fs.joinpath(fake_jdk, "bin", "java.exe")

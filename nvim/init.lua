@@ -52,7 +52,10 @@ require("lazy").setup({
 		-- LazyVim core: brings in sane defaults, LSP wiring, Treesitter, Telescope/
 		-- snacks pickers, which-key, etc. We layer our overrides on top.
 		{ "LazyVim/LazyVim", import = "lazyvim.plugins" },
-		-- Our own plugin specs / overrides (lua/plugins/*.lua).
+		-- LazyVim extras must be imported after core and before local plugins.
+		{ import = "lazyvim.plugins.extras.lang.java" },
+		{ import = "lazyvim.plugins.extras.lang.python" },
+		-- Our own plugin specs / overrides (lua/plugins/*.lua) always come last.
 		{ import = "plugins" },
 	},
 	defaults = {

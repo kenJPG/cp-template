@@ -1,10 +1,10 @@
--- Java projects target Java 17. Current JDTLS itself requires Java 21, so the
--- installer provides both runtimes and this spec keeps their roles explicit.
+-- Java projects target Java 17. Current JDTLS itself requires Java 21, and
+-- Minecraft 26.x projects currently use Java 25, so the installer provides all
+-- three runtimes while keeping their roles explicit.
 
 local windows_runtime = require("config.windows_runtime")
 
 return {
-	{ import = "lazyvim.plugins.extras.lang.java" },
 	{
 		"neovim/nvim-lspconfig",
 		opts = { servers = { jdtls = { mason = false } } },
@@ -14,9 +14,20 @@ return {
 		opts = function(_, opts)
 			local jdk17 = windows_runtime.temurin_home(17)
 			local jdk21 = windows_runtime.temurin_home(21)
+			local jdk25 = windows_runtime.temurin_home(25)
 			local python_home = windows_runtime.python_home()
 			local mason_root = vim.fs.joinpath(vim.fn.stdpath("data"), "mason")
 			local jdtls = vim.fs.joinpath(mason_root, "bin", vim.fn.has("win32") == 1 and "jdtls.cmd" or "jdtls")
+			local runtimes = {}
+			if jdk17 then
+				runtimes[#runtimes + 1] = { name = "JavaSE-17", path = jdk17, default = true }
+			end
+			if jdk21 then
+				runtimes[#runtimes + 1] = { name = "JavaSE-21", path = jdk21 }
+			end
+			if jdk25 then
+				runtimes[#runtimes + 1] = { name = "JavaSE-25", path = jdk25 }
+			end
 
 			opts.dap = false
 			opts.dap_main = false
@@ -28,9 +39,7 @@ return {
 			opts.settings = vim.tbl_deep_extend("force", opts.settings or {}, {
 				java = {
 					configuration = {
-						runtimes = jdk17 and {
-							{ name = "JavaSE-17", path = jdk17, default = true },
-						} or nil,
+						runtimes = #runtimes > 0 and runtimes or nil,
 					},
 					inlayHints = { parameterNames = { enabled = "none" } },
 				},
