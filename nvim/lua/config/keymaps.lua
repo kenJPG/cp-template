@@ -28,3 +28,7 @@ end, { silent = true, desc = "Open dashboard" })
 -- PowerShell send <C-BS>, which is what we map here.)
 map("i", "<C-BS>", "<C-w>", { noremap = true })
 map("c", "<C-BS>", "<C-w>", { noremap = true })
+
+-- Neovide/Windows may not pass Ctrl-\\ reliably, so Esc is the simple fallback
+-- for leaving terminal input mode without sending a key to the shell.
+map("t", "<Esc>", [[<C-\><C-n>]], { noremap = true, silent = true, desc = "Leave terminal input" })
