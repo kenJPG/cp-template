@@ -169,8 +169,13 @@ Details that matter:
   LazyVim's inherited Snacks smooth scrolling are disabled.
 - Code windows use Neovim's fixed native number/sign gutter rather than a
   dynamically sized status column, preventing a stale oversized left margin.
-- The editor uses Neovim's built-in `vim` colorscheme on a light background,
-  matching the classic native gVim syntax colors without a theme plugin.
+- The editor uses a true-white, high-chroma Vim paper palette with classic
+  saturated syntax colors. Java uses Treesitter as its single, consistent
+  syntax-color source.
+- Changed file buffers save exact text when editing pauses, the buffer is left,
+  or Neovide loses focus. Autosave preserves normal write hooks but suppresses
+  automatic formatting; manual `:write` still formats. Special, unnamed, and
+  read-only buffers are ignored.
 - C/C++ inferred-type inlay hints are disabled, and tabs/trailing spaces render
   as ordinary blank whitespace instead of inline type labels or `>`/`-` marks.
 - Indentation guides are disabled. Smart auto-pairs (mini.pairs) are on:
@@ -307,6 +312,7 @@ Official references:
 | `<leader><space>` | global | Clear search highlight |
 | `<leader>q` | global | Quit all without saving |
 | `<C-BS>` | insert / command | Delete previous word |
+| `<Tab>` | insert | Accept the selected completion; otherwise insert indentation |
 | `<Esc>` | C++ input panel | Return to the source editor |
 | `<F5>` | C++ input panel | Submit the buffer as pre-fed stdin |
 | `<C-q>` | C++ input panel | Close the run panel |

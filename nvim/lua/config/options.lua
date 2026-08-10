@@ -15,6 +15,7 @@ local opt = vim.opt
 opt.background = "light" -- classic gVim uses its light syntax palette
 opt.number = true -- show line numbers
 opt.belloff = "all" -- no bells, ever (the terminal beep is maddening)
+opt.updatetime = 300
 
 -- Use Neovim's fixed native gutter. A dynamic custom statuscolumn can grow for
 -- one unusually wide line and remain cached at that width for the whole window.

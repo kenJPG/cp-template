@@ -21,6 +21,7 @@ local cpp_tasks = require("config.cpp_tasks")
 local language_run = require("config.language_run")
 local windows_runtime = require("config.windows_runtime")
 local colorscheme_plugin_spec = dofile(vim.fs.joinpath(bootstrap.nvim_root, "lua", "plugins", "colorscheme.lua"))
+local completion_plugin_spec = dofile(vim.fs.joinpath(bootstrap.nvim_root, "lua", "plugins", "completion.lua"))
 local cpp_plugin_spec = dofile(vim.fs.joinpath(bootstrap.nvim_root, "lua", "plugins", "cpp.lua"))
 local editor_plugin_spec = dofile(vim.fs.joinpath(bootstrap.nvim_root, "lua", "plugins", "editor.lua"))
 local java_plugin_spec = dofile(vim.fs.joinpath(bootstrap.nvim_root, "lua", "plugins", "java.lua"))
@@ -111,7 +112,24 @@ assert_equal(vim.wo.numberwidth, 4, "code windows should use a stable four-cell 
 
 local colorscheme = find_plugin(colorscheme_plugin_spec, "LazyVim/LazyVim")
 assert_true(colorscheme ~= nil, "colorscheme spec should configure LazyVim")
-assert_equal(colorscheme.opts.colorscheme, "vim", "classic built-in Vim colors should be active")
+assert_equal(colorscheme.opts.colorscheme, "vim", "the vivid paper palette should use the built-in Vim scheme")
+assert_true(type(colorscheme.init) == "function", "the Vim paper palette should register its color override")
+colorscheme.init()
+vim.cmd.colorscheme("vim")
+local function highlight_hex(group, key)
+	return string.format("#%06X", vim.api.nvim_get_hl(0, { name = group, link = false })[key])
+end
+assert_equal(highlight_hex("Normal", "bg"), "#FFFFFF", "the editor background should be true white")
+assert_equal(highlight_hex("@keyword", "fg"), "#0000D7", "keywords should use saturated blue")
+assert_equal(highlight_hex("@type", "fg"), "#7A00CC", "types should use saturated purple")
+assert_equal(highlight_hex("@function.method", "fg"), "#007A7A", "methods should use saturated cyan")
+assert_equal(highlight_hex("@string", "fg"), "#008000", "strings should use saturated green")
+assert_equal(highlight_hex("@number", "fg"), "#B84000", "numbers should use saturated orange")
+assert_equal(highlight_hex("@variable.member", "fg"), "#B0008F", "members should use saturated magenta")
+assert_equal(highlight_hex("@operator", "fg"), "#D00000", "operators should use saturated red")
+local completion = find_plugin(completion_plugin_spec, "saghen/blink.cmp")
+assert_true(completion ~= nil, "completion spec should configure blink.cmp")
+assert_equal(completion.opts.keymap["<Tab>"], { "select_and_accept", "fallback" }, "Tab should accept completion and fallback to indent")
 
 local lspconfig = find_plugin(cpp_plugin_spec, "neovim/nvim-lspconfig")
 assert_true(lspconfig ~= nil, "C++ plugin spec should configure nvim-lspconfig")
@@ -203,6 +221,8 @@ local snacks = find_plugin(editor_plugin_spec, "folke/snacks.nvim")
 assert_true(snacks ~= nil, "editor plugin spec should override snacks.nvim")
 assert_equal(snacks.opts.scroll.enabled, false, "Snacks smooth scrolling should be disabled")
 assert_equal(snacks.opts.indent.enabled, false, "Snacks indentation guides should be disabled")
+local pairs = find_plugin(editor_plugin_spec, "nvim-mini/mini.pairs")
+assert_equal(pairs.opts.modes.command, false, "auto-pairs should not alter command-line input")
 
 local preview_toggle = find_key(typst_plugin_spec, "<leader>tp")
 assert_true(preview_toggle ~= nil, "typst plugin spec should define <leader>tp")
@@ -217,6 +237,7 @@ assert_true(map_exists(preloaded_cpp_buf, "n", "<F6>"), "already-open cpp buffer
 assert_true(map_exists(preloaded_cpp_buf, "n", " it"), "already-open cpp buffers should receive <leader>it")
 assert_true(map_exists(preloaded_java_buf, "n", "<F5>"), "already-open Java buffers should receive <F5>")
 assert_true(map_exists(preloaded_java_buf, "n", " it"), "already-open Java buffers should receive <leader>it")
+assert_equal(vim.api.nvim_get_option_value("shiftwidth", { buf = preloaded_java_buf }), 4, "Java should keep four spaces")
 assert_true(map_exists(preloaded_python_buf, "n", "<F5>"), "already-open Python buffers should receive <F5>")
 assert_true(map_exists(preloaded_python_buf, "n", " it"), "already-open Python buffers should receive <leader>it")
 assert_true(vim.api.nvim_get_option_value("cindent", { buf = preloaded_cpp_buf }), "cpp should enable cindent locally")
@@ -256,6 +277,15 @@ assert_true(map_exists(java_buf, "v", "<F5>"), "<F5> should exist in Java visual
 assert_true(map_exists(java_buf, "n", " it"), "<leader>it should exist in Java normal mode")
 assert_true(vim.api.nvim_buf_get_commands(java_buf, {}).LanguageRun ~= nil, "LanguageRun should exist in Java buffers")
 assert_true(vim.api.nvim_buf_get_commands(java_buf, {}).TemplateJava ~= nil, "TemplateJava should exist in Java buffers")
+
+local original_get_client = vim.lsp.get_client_by_id
+local fake_jdtls = { id = 42, name = "jdtls", server_capabilities = { semanticTokensProvider = {} } }
+vim.lsp.get_client_by_id = function()
+	return fake_jdtls
+end
+vim.api.nvim_exec_autocmds("LspAttach", { buffer = java_buf, data = { client_id = fake_jdtls.id } })
+vim.lsp.get_client_by_id = original_get_client
+assert_true(fake_jdtls.server_capabilities.semanticTokensProvider == nil, "JDTLS semantic tokens should stay disabled")
 
 vim.cmd("enew")
 vim.cmd("file practice.py")
@@ -478,5 +508,14 @@ if fallback_java_argv then
 	)
 end
 vim.fn.delete(runner_root, "rf")
+
+local autosave_path = vim.fn.tempname() .. ".txt"
+vim.fn.writefile({ "before" }, autosave_path)
+vim.cmd.edit(vim.fn.fnameescape(autosave_path))
+vim.api.nvim_buf_set_lines(0, 0, -1, false, { "after" })
+vim.api.nvim_exec_autocmds("CursorHoldI", { buffer = 0 })
+assert_equal(vim.fn.readfile(autosave_path)[1], "after", "autosave should persist edits on idle")
+vim.cmd.bwipeout({ bang = true })
+vim.fn.delete(autosave_path)
 
 print("tests/run.lua: ok")

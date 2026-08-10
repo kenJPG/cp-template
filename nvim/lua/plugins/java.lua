@@ -1,6 +1,5 @@
--- Java projects target Java 17. Current JDTLS itself requires Java 21, and
--- Minecraft 26.x projects currently use Java 25, so the installer provides all
--- three runtimes while keeping their roles explicit.
+-- Java projects target Java 17. JDTLS runs on Java 21, while Minecraft 26.x
+-- projects can select the installed Java 25 runtime.
 
 local windows_runtime = require("config.windows_runtime")
 

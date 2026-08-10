@@ -178,11 +178,6 @@ function M.insert_template(filetype, bufnr)
 	return true
 end
 
-function M.insert_current_buffer_template(bufnr)
-	bufnr = bufnr or vim.api.nvim_get_current_buf()
-	return M.insert_template(vim.bo[bufnr].filetype, bufnr)
-end
-
 local function command_callback(filetype, bufnr)
 	return function()
 		M.insert_template(filetype, bufnr)

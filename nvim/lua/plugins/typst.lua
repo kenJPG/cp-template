@@ -1,20 +1,3 @@
--- ============================================================================
--- typst.lua — Typst language support
--- ============================================================================
--- Three pieces:
---   * tinymist — the Typst language server (completion, diagnostics, format).
---   * typst-preview.nvim (chomosuke fork) — live preview rendered as an SVG
---     page in a normal browser tab, over a local HTTP+WebSocket server. This
---     is deliberately NOT inline-terminal image rendering (kitty graphics
---     protocol): that route needs the terminal to report per-cell pixel size
---     accurately, which is unreliable in practice and was a whole saga on its
---     own. A browser tab sidesteps all of that — it's just an HTTP server and
---     your normal browser, and it's why this whole setup can run as plain
---     native Windows Neovim with no Linux VM underneath it at all.
---   * <leader>te — export the current file straight to PDF via `typst compile`
---     and open it, for when you want an actual document instead of a preview.
--- ============================================================================
-
 local function notify(msg, level)
   vim.notify(msg, level, { title = "Typst" })
 end

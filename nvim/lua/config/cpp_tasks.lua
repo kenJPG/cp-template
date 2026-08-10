@@ -580,10 +580,6 @@ function M.build_and_run()
 	compile_current_buffer(show_input_panel)
 end
 
-function M.insert_template()
-	return require("config.language_templates").insert_template("cpp")
-end
-
 local function attach_to_cpp_buffer(bufnr)
 	if vim.b[bufnr].cpp_tasks_attached then
 		return

@@ -26,7 +26,7 @@ return {
 		"nvim-mini/mini.pairs",
 		enabled = true,
 		opts = {
-			modes = { insert = true, command = true, terminal = false },
+			modes = { insert = true, command = false, terminal = false },
 			skip_next = [=[[%w%%%'%[%"%.%`%$]]=],
 			skip_ts = { "string" },
 			skip_unbalanced = true,
