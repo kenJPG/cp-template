@@ -11,8 +11,8 @@ return {
 			opts.lsp.progress.enabled = false
 
 			opts.routes = opts.routes or {}
-			table.insert(opts.routes, {
-				filter = { event = "msg_show", kind = "", find = "written" },
+			table.insert(opts.routes, 1, {
+				filter = { event = "msg_show", find = "written" },
 				opts = { skip = true },
 			})
 		end,

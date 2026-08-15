@@ -57,7 +57,7 @@ vim.api.nvim_create_autocmd({ "CursorHold", "CursorHoldI", "InsertLeave" }, {
 		end
 		local prev = vim.b[buf].autoformat
 		vim.b[buf].autoformat = false
-		pcall(vim.cmd, "silent update")
+		pcall(vim.cmd, "noautocmd silent! update")
 		vim.b[buf].autoformat = prev
 	end,
 })
