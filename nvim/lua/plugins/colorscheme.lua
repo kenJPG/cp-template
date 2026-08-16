@@ -62,6 +62,20 @@ local function apply_vim_paper()
 		["@property"] = { fg = colors.magenta },
 		["@variable.member"] = { fg = colors.magenta },
 		["@operator"] = { fg = colors.red },
+		-- render-markdown.nvim: paper-palette overrides (stock vim fallbacks are neon magenta/pink)
+		RenderMarkdownH1 = { fg = colors.blue, bold = true },
+		RenderMarkdownH2 = { fg = colors.cyan, bold = true },
+		RenderMarkdownH3 = { fg = colors.green, bold = true },
+		RenderMarkdownH4 = { fg = colors.comment, bold = true },
+		RenderMarkdownH5 = { fg = colors.comment, bold = true },
+		RenderMarkdownH6 = { fg = colors.comment, bold = true },
+		RenderMarkdownCode = { bg = "#F0F3F8" },
+		RenderMarkdownCodeInline = { bg = "#F0F3F8" },
+		RenderMarkdownTableHead = { fg = colors.blue, bold = true },
+		RenderMarkdownTableRow = { fg = colors.foreground },
+		RenderMarkdownBullet = { fg = colors.comment },
+		RenderMarkdownDash = { fg = colors.comment },
+		RenderMarkdownQuote = { fg = colors.comment },
 	}
 
 	for group, highlight in pairs(highlights) do
