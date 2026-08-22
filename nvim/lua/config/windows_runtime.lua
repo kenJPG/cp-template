@@ -52,4 +52,18 @@ function M.with_path(paths)
 	return table.concat(entries, ";")
 end
 
+--- Convert a Windows path (C:/... or C:\...) to its WSL mount (/mnt/c/...).
+function M.wsl_path(win_path)
+	if not win_path then
+		return nil
+	end
+	local normalized = win_path:gsub("\\", "/")
+	local drive, rest = normalized:match("^(%a):(.*)$")
+	if drive then
+		return "/mnt/" .. drive:lower() .. rest
+	end
+	-- UNC \\wsl$\... or an already-Linux path: best-effort passthrough.
+	return normalized
+end
+
 return M

@@ -45,6 +45,52 @@ local function project_root(bufnr, source_path)
 		or vim.fs.dirname(source_path)
 end
 
+local function shq(s)
+	return "'" .. s:gsub("'", "'\\''") .. "'"
+end
+
+-- Walk up from `dir` looking for a file named `name`.
+local function find_up(dir, name)
+	local current = dir
+	for _ = 1, 20 do
+		local candidate = vim.fs.joinpath(current, name)
+		if vim.fn.filereadable(candidate) == 1 then
+			return candidate
+		end
+		local parent = vim.fs.dirname(current)
+		if parent == current then
+			break
+		end
+		current = parent
+	end
+end
+
+-- Root of a ROS 2 project (the directory holding ros.toml), or nil.
+local function ros_root(source_path)
+	local marker = find_up(vim.fs.dirname(source_path), "ros.toml")
+	if not marker then
+		return nil
+	end
+	return vim.fs.dirname(marker)
+end
+
+-- Read the ROS distro from ros.toml (defaults to jazzy when absent/unreadable).
+local function ros_distro(root)
+	local path = vim.fs.joinpath(root, "ros.toml")
+	local ok, lines = pcall(vim.fn.readfile, path)
+	if not ok then
+		return "jazzy"
+	end
+	local content = table.concat(lines, "\n")
+	return content:match('distro%s*=%s*"([^"]+)"')
+		or content:match("distro%s*=%s*'([^']+)'")
+		or "jazzy"
+end
+
+local function wsl_available()
+	return vim.fn.has("win32") == 1 and vim.fn.exepath("wsl.exe") ~= ""
+end
+
 local function selected_python()
 	local ok, selector = pcall(require, "venv-selector")
 	if ok then
@@ -103,6 +149,20 @@ function M.command_for(bufnr)
 	end
 
 	if filetype == "python" then
+		local rroot = ros_root(source_path)
+		if rroot and wsl_available() then
+			local distro = ros_distro(rroot)
+			local wsl_file = windows_runtime.wsl_path(source_path)
+			local wsl_dir = windows_runtime.wsl_path(rroot)
+			local cmd = string.format(
+				"cd %s && source /opt/ros/%s/setup.bash && /usr/bin/python3 %s",
+				shq(wsl_dir),
+				distro,
+				shq(wsl_file)
+			)
+			return { "wsl.exe", "-e", "bash", "-lc", cmd }, rroot, nil
+		end
+
 		local python = python_executable(bufnr, source_path)
 		if not python then
 			return nil, nil, "No Python interpreter is available. Use <leader>cv or create a project .venv."
